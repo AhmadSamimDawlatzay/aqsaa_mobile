@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:aqsaa_mobile/auth/session_store.dart';
+import 'support/auth_fixtures.dart';
 import 'package:aqsaa_mobile/api/api_client.dart';
 import 'package:aqsaa_mobile/l10n/app_strings.dart';
 import 'package:aqsaa_mobile/main.dart';
@@ -15,7 +17,9 @@ void main() {
     final pending = Completer<http.Response>();
     final client = ApiClient(client: MockClient((_) => pending.future));
     addTearDown(client.close);
-    await tester.pumpWidget(AqsaaApp(client: client));
+    await tester.pumpWidget(
+      AqsaaApp(sessionStore: SessionStore(MemorySecureStore()), client: client),
+    );
     expect(find.text(AppStrings.loading), findsOneWidget);
     pending.complete(jsonResponse());
     await tester.pumpAndSettle();
@@ -35,7 +39,9 @@ void main() {
       ),
     );
     addTearDown(client.close);
-    await tester.pumpWidget(AqsaaApp(client: client));
+    await tester.pumpWidget(
+      AqsaaApp(sessionStore: SessionStore(MemorySecureStore()), client: client),
+    );
     await tester.pumpAndSettle();
     expect(find.textContaining('HTTP 503'), findsOneWidget);
     await tester.tap(find.text(AppStrings.retry));
@@ -60,7 +66,11 @@ void main() {
     );
     addTearDown(client.close);
     await tester.pumpWidget(
-      AqsaaApp(client: client, textDirection: TextDirection.rtl),
+      AqsaaApp(
+        sessionStore: SessionStore(MemorySecureStore()),
+        client: client,
+        textDirection: TextDirection.rtl,
+      ),
     );
     await tester.pumpAndSettle();
     expect(find.text(AppStrings.empty), findsOneWidget);
@@ -93,7 +103,9 @@ void main() {
       ),
     );
     addTearDown(client.close);
-    await tester.pumpWidget(AqsaaApp(client: client));
+    await tester.pumpWidget(
+      AqsaaApp(sessionStore: SessionStore(MemorySecureStore()), client: client),
+    );
     await tester.pumpAndSettle();
     expect(find.text(AppStrings.failed), findsOneWidget);
     expect(find.text(AppStrings.connected), findsNothing);

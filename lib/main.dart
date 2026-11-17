@@ -3,16 +3,23 @@ import 'package:flutter/services.dart';
 import 'api/api_client.dart';
 import 'l10n/app_strings.dart';
 import 'models/bootstrap_response.dart';
+import 'auth/auth_flow.dart';
+import 'auth/session_store.dart';
 
-void main() => runApp(const AqsaaApp());
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const AqsaaApp());
+}
 
 class AqsaaApp extends StatelessWidget {
   const AqsaaApp({
     super.key,
     this.client,
+    this.sessionStore,
     this.textDirection = TextDirection.ltr,
   });
   final ApiClient? client;
+  final SessionStore? sessionStore;
   final TextDirection textDirection;
 
   @override
@@ -26,25 +33,28 @@ class AqsaaApp extends StatelessWidget {
     ),
     builder: (context, child) =>
         Directionality(textDirection: textDirection, child: child!),
-    home: ConnectionScreen(client: client),
+    home: ConnectionScreen(client: client, sessionStore: sessionStore),
   );
 }
 
 class ConnectionScreen extends StatefulWidget {
-  const ConnectionScreen({super.key, this.client});
+  const ConnectionScreen({super.key, this.client, this.sessionStore});
   final ApiClient? client;
+  final SessionStore? sessionStore;
   @override
   State<ConnectionScreen> createState() => _ConnectionScreenState();
 }
 
 class _ConnectionScreenState extends State<ConnectionScreen> {
   late final ApiClient _client;
+  late final SessionStore _sessionStore;
   late Future<BootstrapResponse> _response;
 
   @override
   void initState() {
     super.initState();
     _client = widget.client ?? ApiClient();
+    _sessionStore = widget.sessionStore ?? SessionStore(PlatformSecureStore());
     _response = _client.fetchBootstrap();
   }
 
@@ -130,39 +140,51 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
                           );
                         }
                         final institution = snapshot.data!.institution;
-                        return Column(
-                          children: [
-                            InstitutionLogo(
-                              uri: _client.logoUri(institution?.logo),
-                            ),
-                            const SizedBox(height: 20),
-                            if (institution != null)
-                              Text(
-                                institution.name,
-                                textAlign: TextAlign.center,
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.headlineSmall,
+                        return AuthFlow(
+                          api: _client,
+                          store: _sessionStore,
+                          institution: institution,
+                          branding: InstitutionLogo(
+                            uri: _client.logoUri(institution?.logo),
+                          ),
+                          welcomeBuilder: (openLogin) => Column(
+                            children: [
+                              InstitutionLogo(
+                                uri: _client.logoUri(institution?.logo),
                               ),
-                            const SizedBox(height: 16),
-                            const Icon(
-                              Icons.check_circle_outline,
-                              color: Color(0xFF12685B),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              institution == null
-                                  ? AppStrings.empty
-                                  : AppStrings.connected,
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 24),
-                            OutlinedButton.icon(
-                              onPressed: _retry,
-                              icon: const Icon(Icons.refresh),
-                              label: const Text(AppStrings.refresh),
-                            ),
-                          ],
+                              const SizedBox(height: 20),
+                              if (institution != null)
+                                Text(
+                                  institution.name,
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.headlineSmall,
+                                ),
+                              const SizedBox(height: 16),
+                              const Icon(
+                                Icons.check_circle_outline,
+                                color: Color(0xFF12685B),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                institution == null
+                                    ? AppStrings.empty
+                                    : AppStrings.connected,
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 24),
+                              FilledButton(
+                                onPressed: openLogin,
+                                child: const Text(AppStrings.login),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: _retry,
+                                icon: const Icon(Icons.refresh),
+                                label: const Text(AppStrings.refresh),
+                              ),
+                            ],
+                          ),
                         );
                       },
                     ),
