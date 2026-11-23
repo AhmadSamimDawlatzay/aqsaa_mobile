@@ -1,6 +1,20 @@
 ﻿# Aqsaa Mobile
 
-Implemented: public institution bootstrap, email/password login, secure session restoration, a minimal authenticated home, and logout. No business modules, refresh tokens, Firebase, or push registration are implemented.
+Implemented: public institution bootstrap, email/password login, secure session restoration, guardian linked-child list, placement details, attendance history and summary, and logout. Business records remain read-only; no refresh tokens, Firebase, or push registration are implemented.
+
+## Guardian child access
+
+The home screen exposes **My Children** when `capabilities.data.linked_children` contains `students`. Roles and `has_linked_students` do not gate the entry: a guardian with zero links must be able to see a genuine empty state.
+
+- `GET me/students?page=N` returns `data` (explicit child fields) and `meta.current_page/last_page`. The app never fetches the general student directory.
+- Tap a child to request `GET me/students/{id}?tab=student-attendances&page=N`. Read `data.student`, nullable `data.placement`, `data.summary`, and the direct Laravel paginator in `data.records`. Placement supplies class, section, program, level, year, and branch names. No exam-score UI is added.
+- Attendance history is paginated. The date picker filters summary totals through `GET students/{id}/attendance-summary?from=YYYY-MM-DD&to=YYYY-MM-DD`; the child-history endpoint currently does not accept date bounds. The date picker caps dates at today, and the server also rejects future `to` dates. Missing attendance records are never treated as absences.
+- Loading, pagination, pull-to-refresh, Refresh, Retry, and empty/error states are distinct. A failed or malformed request is not an empty list. Home Refresh revalidates profile and capabilities. A child-request 401 clears the invalid session; 403/404 only clear that child detail and explain the access issue.
+- Child data stays in widget memory. Logout removes the view; generation checks discard late responses. The server authorizes every request using active `mobile_user_students` links, independently of contact records.
+
+On 2026-11-21, the designated demo guardian's live login returned 201; profile, capabilities, linked list, child details, and attendance summary returned 200; logout returned 204. The list contained three children, including the expected `DEMO-ST-001` (the live account is linked to two more students than the local seeder expectation). Four attendance rows were returned for each checked child. No live links or records were changed. A linked child's placement and attendance were verified on the Android emulator after a full restart with the explicit demo API URL. Session restoration and logout returned to login with no child data displayed. Live authentication and child data were therefore verified; the automated emulator integration tests below use synthetic HTTP responses.
+
+Regression coverage: `test/children_test.dart`; run the empty/error, pagination, detail, refresh, child-switch, and logout scenarios on Android with `flutter test integration_test/children_test.dart -d emulator-5554`. These emulator tests use synthetic HTTP responses and do not modify live accounts. Rebuild/run `lib/main.dart` with the explicit demo API URL afterwards to restore the normal app.
 
 ## Run
 
@@ -67,9 +81,11 @@ For normal switching, log out successfully first, then enter the other account's
 - `lib/auth/session_store.dart`: a small secure-storage interface and platform adapter. Tests can replace the platform boundary with memory storage.
 - `lib/auth/session_controller.dart`: coordinates restore, login, validation, logout, persistence, and stale-response protection.
 - `lib/auth/auth_flow.dart`: login form and minimal account home; uses the same branding/card/layout.
+- `lib/auth/children_view.dart`: capability-gated child list, details, paginated attendance, summary date filter, pull-to-refresh, and child-specific errors.
+- `lib/models/child_models.dart`: typed linked-child, placement, attendance-summary, and attendance-history data.
 - `lib/l10n/app_strings.dart`: all visible copy, ready for future Pashto (`ps`), Dari (`fa`), Arabic (`ar`), and English (`en`) translations. Current copy is English/LTR; RTL layouts are tested, not translated yet.
-- `test/`: parser, API, storage, controller, and widget tests. Synthetic credentials exist only in test fixtures and never reach the demo API.
-- `integration_test/session_storage_test.dart`: real native secure-storage test on Android, with mocked HTTP and an isolated `.invalid` API scope.
+- `test/`: API/parser, storage, controller, child workflow, and widget tests. Synthetic credentials exist only in test fixtures and never reach the demo API.
+- `integration_test/`: Android secure-storage and guardian workflow checks with mocked HTTP; these do not change live data.
 
 ## Automated verification
 
@@ -79,27 +95,29 @@ flutter analyze
 flutter test
 flutter build apk --debug --dart-define=API_BASE_URL=https://demo.aqsaa.app/api/v1
 flutter test integration_test/session_storage_test.dart -d emulator-5554
+flutter test integration_test/children_test.dart -d emulator-5554
 ```
 
-Unit/widget coverage includes the login request/response, device requirement, credential/validation/rate/server failures, secure-storage adapter, bearer headers, server separation, restoration, invalid tokens, temporary failures, 403 preservation, logout success/failure, stale responses, capability scopes, required fields, password visibility, duplicate-submit prevention, no-access home, logo fallback, and narrow RTL layout.
+Unit/widget coverage includes the login request/response, device requirement, credential/validation/rate/server failures, secure-storage adapter, bearer headers, server separation, restoration, invalid tokens, temporary failures, 403 preservation, logout success/failure, stale responses, capability scopes, linked-student parsing, empty/error states, child pagination, placement and attendance parsing, date filters, pull-to-refresh, revoked-child access, child switching, required fields, password visibility, duplicate-submit prevention, no-access home, logo fallback, and narrow RTL layout.
+
+### Results on 2026-11-22
+
+`dart format lib test integration_test` completed; `flutter analyze` reported no issues; all 42 unit/widget tests passed; all four guardian integration tests passed on `emulator-5554` using mocked HTTP; and the Android debug APK built successfully with the demo API URL. The normal app was then launched on the emulator and the public institution welcome screen showed **Connected**. The live authenticated guardian flow was verified separately as recorded above; the automated tests do not use the live account.
 
 ## Manual demo verification (designated account only)
 
-No demo/test credentials were supplied, so **live authenticated login, restoration, and logout have not been verified**. No credentials were discovered, guessed, or sent to the demo server.
+The live designated-account flow has already been verified (login, restore, child list/details, attendance summary, and confirmed logout). To repeat it on the emulator, run the command above and sign in only with the authorized demo account using credentials supplied through the approved local channel; do not put them in source code or documentation.
 
-1. Run the command above. Expect the public institution name and Connected, then tap **Log in**. The current demo has no logo, so the school icon is expected.
-2. Tap Log in with blank fields: required errors appear without a request. Use the eye button to check password visibility.
-3. Enter only your designated test account's email and password. Tap Log in once. Expect the institution, safe user name/email, roles, and either access-ready or no-supported-access text. There are no unfinished module buttons.
-4. Force-stop/reopen the app without logging out. Expect session verification and then home without re-entering a password.
-5. Disable emulator internet and restart. Expect a connection error and Retry, not automatic token deletion. Restore internet and retry; home should return after validation. If bootstrap itself cannot load, its existing connection-error screen appears first.
-6. While on home, disable internet and tap Log out. Expect a clear unconfirmed-logout message and Retry. Restore internet and retry; expect an empty login form. Restart to confirm no previous user is restored.
-7. Log in again, then have an authorized operator revoke/expire the designated test token. Restart online: expect login and the invalid-session/device-cleanup notice. Do not edit backend data merely to test this without authorization.
-8. For account switching, complete confirmed logout before using a second explicitly designated test account. Check that only the new user's profile and capabilities appear.
-9. If testing wrong credentials or rate limiting manually, use only the designated test account and coordinate limits with the operator; do not guess other accounts.
+1. The public institution name and Connected status appear; the current demo has no logo, so the school icon is expected.
+2. Tap **Log in**. Blank fields show required errors without a request; use the eye control to check password visibility.
+3. After login, open **My Children**. The live account currently shows three children. Tap a student to see placement, recorded attendance summary, and paginated attendance history.
+4. Use **Filter summary by dates** to request date-bounded totals. History pages remain the complete API-provided history because that route does not accept date bounds.
+5. Force-stop/reopen while signed in. The app verifies the saved session before showing the student list. A temporary network failure preserves the session and offers retry.
+6. Tap **Log out**. After HTTP 204, the app returns to the login screen and no child data remains visible.
 
-This milestone makes no backend changes. It adds no attendance or other business workflows.
+This milestone makes no backend changes and adds no attendance write actions or other business workflows.
 
-### Results on 2026-11-17
+### Earlier bootstrap/authentication milestone results (2026-11-17)
 
 Formatting completed; flutter analyze reported no issues; all 35 unit/widget tests passed. The Android debug APK built successfully. The emulator integration test passed using real Android secure storage and mocked HTTP (synthetic session restore and logout). A read-only live bootstrap request returned HTTP 200 with application/json. No live authentication requests were made. iOS build/signing remains unverified on Windows.
 The normal demo-configured app was then rebuilt, installed, and launched. Visual inspection confirmed the live institution welcome screen and empty branded email/password login form. The emulator is left on that login form; no credentials were entered.

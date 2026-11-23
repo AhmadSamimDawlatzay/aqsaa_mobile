@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import '../api/api_client.dart';
 import '../l10n/app_strings.dart';
 import '../models/bootstrap_response.dart';
+import '../theme/app_theme.dart';
+import '../widgets/app_components.dart';
 import 'session_controller.dart';
 import 'session_store.dart';
+import 'children_view.dart';
 
 class AuthFlow extends StatefulWidget {
   const AuthFlow({
@@ -12,13 +15,13 @@ class AuthFlow extends StatefulWidget {
     required this.store,
     required this.institution,
     required this.branding,
-    required this.welcomeBuilder,
+    required this.onRetryBootstrap,
   });
   final ApiClient api;
   final SessionStore store;
   final Institution? institution;
   final Widget branding;
-  final Widget Function(VoidCallback openLogin) welcomeBuilder;
+  final VoidCallback onRetryBootstrap;
   @override
   State<AuthFlow> createState() => _AuthFlowState();
 }
@@ -42,78 +45,294 @@ class _AuthFlowState extends State<AuthFlow> {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: session,
     builder: (context, _) {
-      if (session.phase == SessionPhase.signedOut && !session.showLogin) {
-        return widget.welcomeBuilder(session.openLogin);
+      if (session.phase == SessionPhase.authenticated) {
+        return _AuthenticatedLayout(
+          session: session,
+          institution: widget.institution,
+        );
       }
-      final formVisible =
-          session.showLogin &&
-          (session.phase == SessionPhase.signedOut ||
-              session.phase == SessionPhase.signingIn);
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Center(child: widget.branding),
-          const SizedBox(height: 16),
-          Text(
-            widget.institution?.name ?? AppStrings.appName,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleLarge,
+      if (session.busy && session.phase != SessionPhase.signingIn) {
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(widget.institution?.name ?? AppStrings.appName),
           ),
-          const SizedBox(height: 20),
-          if (formVisible)
-            LoginForm(session: session)
-          else if (session.busy) ...[
-            const Center(child: CircularProgressIndicator()),
-            const SizedBox(height: 16),
-            Text(
-              session.phase == SessionPhase.loggingOut
-                  ? AppStrings.signingOut
-                  : AppStrings.checkingSession,
-              textAlign: TextAlign.center,
-            ),
-          ] else if (session.phase == SessionPhase.authenticated) ...[
-            Text(
-              AppStrings.home,
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              session.profile!.name,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            Text(session.profile!.email),
-            const SizedBox(height: 8),
-            Text(AppStrings.roles(session.profile!.roles)),
-            const SizedBox(height: 16),
-            Text(
-              session.capabilities!.hasSupportedAccess
-                  ? AppStrings.accessReady
-                  : AppStrings.noCapabilities,
-            ),
-            const SizedBox(height: 24),
-            OutlinedButton.icon(
-              onPressed: session.logout,
-              icon: const Icon(Icons.logout),
-              label: const Text(AppStrings.logout),
-            ),
-          ] else ...[
-            if (session.logoutUnconfirmed)
-              const Text(AppStrings.logoutUnconfirmed),
-            Text(AppStrings.error(session.error)),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: session.retry,
-              child: const Text(AppStrings.retry),
-            ),
-            if (session.hasSession && !session.logoutUnconfirmed)
-              TextButton(
-                onPressed: session.logout,
-                child: const Text(AppStrings.logout),
+          body: AppPageFrame(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(
+                    session.phase == SessionPhase.loggingOut
+                        ? AppStrings.signingOut
+                        : AppStrings.checkingSession,
+                  ),
+                ],
               ),
-          ],
-        ],
-      );
+            ),
+          ),
+        );
+      }
+      if (session.phase == SessionPhase.failure) {
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(widget.institution?.name ?? AppStrings.appName),
+          ),
+          body: AppPageFrame(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.cloud_off_outlined,
+                    size: 40,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    session.logoutUnconfirmed
+                        ? AppStrings.logoutUnconfirmed
+                        : AppStrings.error(session.error),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 18),
+                  FilledButton(
+                    onPressed: session.retry,
+                    child: const Text(AppStrings.retry),
+                  ),
+                  if (session.hasSession && !session.logoutUnconfirmed)
+                    TextButton(
+                      onPressed: session.logout,
+                      child: const Text(AppStrings.logout),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+      return _signedOut(context);
     },
+  );
+
+  Widget _signedOut(BuildContext context) {
+    final formVisible = session.showLogin;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.institution?.name ?? AppStrings.appName),
+      ),
+      body: AppPageFrame(
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 20),
+              Center(child: widget.branding),
+              const SizedBox(height: 18),
+              AppPageHeading(
+                title: formVisible
+                    ? AppStrings.loginHeading
+                    : AppStrings.welcome,
+                subtitle: formVisible
+                    ? AppStrings.loginSubtitle
+                    : AppStrings.subtitle,
+              ),
+              const SizedBox(height: 22),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: formVisible
+                      ? LoginForm(session: session)
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.check_circle_outline,
+                                  color: AppPalette.emerald,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    widget.institution == null
+                                        ? AppStrings.empty
+                                        : AppStrings.connected,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodyLarge,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 18),
+                            FilledButton.icon(
+                              onPressed: session.openLogin,
+                              icon: const Icon(Icons.login),
+                              label: const Text(AppStrings.login),
+                            ),
+                            const SizedBox(height: 6),
+                            TextButton.icon(
+                              onPressed: widget.onRetryBootstrap,
+                              icon: const Icon(Icons.refresh),
+                              label: const Text(AppStrings.refresh),
+                            ),
+                          ],
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthenticatedLayout extends StatefulWidget {
+  const _AuthenticatedLayout({
+    required this.session,
+    required this.institution,
+  });
+  final SessionController session;
+  final Institution? institution;
+
+  @override
+  State<_AuthenticatedLayout> createState() => _AuthenticatedLayoutState();
+}
+
+class _AuthenticatedLayoutState extends State<_AuthenticatedLayout> {
+  int _destination = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = widget.session.profile!;
+    final canViewChildren = widget.session.capabilities!.canViewChildren;
+    final destinations = canViewChildren
+        ? const [
+            NavigationDestination(
+              icon: Icon(Icons.people_outline),
+              selectedIcon: Icon(Icons.people),
+              label: AppStrings.childrenTab,
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.account_circle_outlined),
+              selectedIcon: Icon(Icons.account_circle),
+              label: AppStrings.accountTab,
+            ),
+          ]
+        : const <NavigationDestination>[];
+
+    return Scaffold(
+      appBar: AppBar(title: const Text(AppStrings.appName)),
+      body: canViewChildren
+          ? IndexedStack(
+              index: _destination,
+              children: [
+                ChildrenView(
+                  key: ValueKey('children-${profile.id}'),
+                  session: widget.session,
+                  institution: widget.institution,
+                  profile: profile,
+                ),
+                AccountView(
+                  session: widget.session,
+                  institution: widget.institution,
+                ),
+              ],
+            )
+          : AccountView(
+              session: widget.session,
+              institution: widget.institution,
+            ),
+      bottomNavigationBar: canViewChildren
+          ? NavigationBar(
+              selectedIndex: _destination,
+              destinations: destinations,
+              onDestinationSelected: (index) =>
+                  setState(() => _destination = index),
+            )
+          : null,
+    );
+  }
+}
+
+class AccountView extends StatelessWidget {
+  const AccountView({
+    super.key,
+    required this.session,
+    required this.institution,
+  });
+  final SessionController session;
+  final Institution? institution;
+
+  @override
+  Widget build(BuildContext context) => AppPageFrame(
+    child: ListView(
+      children: [
+        AppPageHeading(
+          title: AppStrings.accountHeading,
+          subtitle: AppStrings.accountSubtitle,
+        ),
+        const SizedBox(height: 20),
+        AppSectionCard(
+          title: AppStrings.profileSection,
+          icon: Icons.person_outline,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AppInfoRow(
+                label: AppStrings.name,
+                value: session.profile!.name,
+                icon: Icons.badge_outlined,
+              ),
+              AppInfoRow(
+                label: AppStrings.email,
+                value: session.profile!.email,
+                icon: Icons.mail_outline,
+              ),
+              if (session.profile!.roles.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: session.profile!.roles
+                      .map(
+                        (role) => Chip(
+                          label: Text(role),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      )
+                      .toList(growable: false),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (institution != null) ...[
+          const SizedBox(height: AppSpacing.section),
+          AppSectionCard(
+            title: AppStrings.institutionSection,
+            icon: Icons.school_outlined,
+            child: Text(
+              institution!.name,
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+          ),
+        ],
+        if (!session.capabilities!.hasSupportedAccess) ...[
+          const SizedBox(height: AppSpacing.section),
+          Text(AppStrings.noCapabilities),
+        ],
+        const SizedBox(height: AppSpacing.section),
+        OutlinedButton.icon(
+          onPressed: session.logout,
+          icon: const Icon(Icons.logout),
+          label: const Text(AppStrings.logout),
+        ),
+      ],
+    ),
   );
 }
 

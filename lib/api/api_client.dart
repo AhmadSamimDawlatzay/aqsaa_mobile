@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/bootstrap_response.dart';
 import '../models/auth_models.dart';
+import '../models/child_models.dart';
 
 enum ApiFailure {
   configuration,
@@ -114,6 +115,49 @@ class ApiClient {
       expectedStatus: 204,
     );
   }
+
+  Future<ChildDetails> fetchChild(
+    SessionCredential session,
+    int id, {
+    int page = 1,
+  }) => _parse(
+    () async => ChildDetails.fromJson(
+      await _request(
+        'GET',
+        'me/students/$id?tab=student-attendances&page=$page',
+        session: session,
+      ),
+    ),
+  );
+
+  Future<ChildPage> fetchChildren(SessionCredential session, {int page = 1}) =>
+      _parse(
+        () async => ChildPage.fromJson(
+          await _request('GET', 'me/students?page=$page', session: session),
+        ),
+      );
+
+  Future<AttendanceSummary> fetchAttendanceSummary(
+    SessionCredential session,
+    int id, {
+    DateTime? from,
+    DateTime? to,
+  }) => _parse(() async {
+    final query = <String, String>{};
+    if (from != null) query['from'] = _date(from);
+    if (to != null) query['to'] = _date(to);
+    final suffix = query.isEmpty ? '' : '?${Uri(queryParameters: query).query}';
+    return AttendanceSummary.fromJson(
+      await _request(
+        'GET',
+        'students/$id/attendance-summary$suffix',
+        session: session,
+      ),
+    );
+  });
+
+  String _date(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
   Future<T> _parse<T>(Future<T> Function() action) async {
     try {

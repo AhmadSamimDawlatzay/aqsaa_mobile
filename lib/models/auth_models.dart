@@ -94,6 +94,7 @@ class Capabilities {
   final List<String> linkedChildren;
   final List<String> assignedTeaching;
   final List<String> technicalActions;
+  bool get canViewChildren => linkedChildren.contains('students');
   List<String> get generalResources => resources
       .where((r) => resourceScopes[r] == ResourceScope.general)
       .toList(growable: false);

@@ -16,6 +16,8 @@ abstract final class AppStrings {
   static const logo = 'Institution logo';
   static const logoFallback = 'Institution logo unavailable';
   static const login = 'Log in';
+  static const loginHeading = 'Sign in to your account';
+  static const loginSubtitle = 'Use your institution account to continue.';
   static const logout = 'Log out';
   static const email = 'Email';
   static const password = 'Password';
@@ -28,9 +30,59 @@ abstract final class AppStrings {
   static const back = 'Back to welcome';
   static const checkingSession = 'Verifying your session...';
   static const signingOut = 'Signing out...';
-  static const home = 'Your account';
-  static const accessReady =
-      'Your account access is ready. More features will be added later.';
+  static const accountHeading = 'Account';
+  static const accountSubtitle = 'Your profile and sign-out options.';
+  static const accountTab = 'Account';
+  static const childrenTab = 'Children';
+  static const profileSection = 'Profile';
+  static const institutionSection = 'Institution';
+  static const name = 'Name';
+  static const academicInformation = 'Academic information';
+  static const attendanceHeading = 'Attendance';
+  static const summaryPeriod = 'Summary period';
+  static const allAvailableDates = 'All available dates';
+  static const editSummaryPeriod = 'Edit summary period';
+  static const attendanceHistoryAllDates = 'Attendance history — all dates';
+  static const summaryUnavailable = 'Summary is unavailable for this period.';
+  static const myChildren = 'My Children';
+  static const noChildrenTitle = 'No linked students';
+  static const loadingChildren = 'Loading your children...';
+  static const errorHeading = 'Something went wrong';
+  static const childDetailsTitle = 'Child details';
+  static const viewAttendance = 'View attendance';
+  static const chooseSummaryPeriod = 'Choose summary period';
+  static const noAttendanceTitle = 'No attendance yet';
+  static String studentNumber(String value) => 'Student number: $value';
+  static String branchValue(String value) => 'Branch: $value';
+  static const noChildren =
+      'No students are linked to your account. Contact your institution administrator.';
+  static const childAccessRevoked =
+      'Access to this student is no longer available. Return to My Children or ask your institution administrator to check the link.';
+  static const noPlacement = 'No current class placement is available.';
+  static const noAttendance = 'No attendance records are available.';
+  static const previous = 'Previous';
+  static const next = 'Next';
+  static const attendanceSummary = 'Attendance summary';
+  static const present = 'Present';
+  static const absent = 'Absent';
+  static const late = 'Late';
+  static const excused = 'Excused';
+  static const filterDates = 'Filter summary by dates';
+  static const nextAttendancePage = 'More attendance';
+  static const unrecordedNotAbsent =
+      'Unrecorded days are not counted as absent.';
+  static const filteredSummary = 'Filtered totals';
+  static String recordedDays(int value) => 'Recorded days: $value';
+  static const placementLabels = {
+    'class': 'Class',
+    'section': 'Section',
+    'program': 'Program',
+    'level': 'Level',
+    'academic_year': 'Academic year',
+    'branch': 'Branch',
+    'status': 'Enrollment status',
+    'enrolled_at': 'Enrolled on',
+  };
   static const noCapabilities =
       'No supported access is assigned to this account. Contact your institution administrator.';
   static const logoutUnconfirmed =
@@ -39,6 +91,24 @@ abstract final class AppStrings {
       'Your session is no longer valid. Please log in again. Any previous server device registration may still need administrator cleanup.';
   static String roles(List<String> roles) =>
       roles.isEmpty ? 'No roles assigned' : 'Roles: ${roles.join(', ')}';
+  static String greeting(String name) =>
+      'Welcome, ${name.trim().split(' ').first}';
+  static String enrollmentStatus(String status) =>
+      switch (status.toLowerCase()) {
+        'active' => 'Active',
+        'completed' => 'Completed',
+        'cancelled' => 'Cancelled',
+        'withdrawn' => 'Withdrawn',
+        _ => status.replaceAll('_', ' '),
+      };
+  static String attendanceStatus(String status) =>
+      switch (status.toLowerCase()) {
+        'present' => present,
+        'absent' => absent,
+        'late' => late,
+        'excused' => excused,
+        _ => status.replaceAll('_', ' '),
+      };
   static String fieldError(String field) => switch (field) {
     'email' => 'Check the email address.',
     'password' => 'Check the password.',

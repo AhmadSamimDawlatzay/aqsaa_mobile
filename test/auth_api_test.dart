@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:aqsaa_mobile/api/api_client.dart';
 import 'package:aqsaa_mobile/models/auth_models.dart';
+import 'package:aqsaa_mobile/models/child_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -206,4 +207,120 @@ void main() {
       );
     },
   );
+
+  test(
+    'child detail parses missing placement, summary, and attendance records',
+    () {
+      final detail = ChildDetails.fromJson({
+        'data': {
+          'student': {
+            'id': 8,
+            'student_number': 'ST-8',
+            'first_name': 'Amina',
+            'last_name': null,
+            'status': 'active',
+          },
+          'placement': null,
+          'summary': {
+            'present': 0,
+            'absent': 0,
+            'late': 1,
+            'excused': 0,
+            'recorded_days': 1,
+            'attendance_rate': 100,
+            'unrecorded_days_are_absent': false,
+          },
+          'records': {
+            'data': [
+              {'id': 4, 'status': 'late', 'attendance_date': '2026-11-20'},
+            ],
+            'current_page': 2,
+            'last_page': 3,
+          },
+        },
+      });
+      expect(detail.child.name, 'Amina');
+      expect(detail.placement, isEmpty);
+      expect(detail.summary.total, 1);
+      expect(detail.summary.unrecordedDaysAreAbsent, isFalse);
+      expect(detail.attendance.single.status, 'late');
+      expect(detail.page, 2);
+      expect(detail.lastPage, 3);
+      expect(
+        () => AttendanceSummary.fromJson({'total': 0}),
+        throwsFormatException,
+      );
+    },
+  );
+
+  test(
+    'attendance date query is sent exactly to authorized endpoint',
+    () async {
+      final api = ApiClient(
+        baseUrl: testBase,
+        client: MockClient((r) async {
+          expect(r.url.path, '/api/v1/students/8/attendance-summary');
+          expect(r.url.queryParameters, {
+            'from': '2026-11-01',
+            'to': '2026-11-22',
+          });
+          expect(r.headers['Authorization'], 'Bearer synthetic-test-token');
+          return response({
+            'data': {
+              'present': 1,
+              'absent': 0,
+              'late': 0,
+              'excused': 0,
+              'recorded_days': 1,
+              'unrecorded_days_are_absent': false,
+            },
+          });
+        }),
+      );
+      addTearDown(api.close);
+      final result = await api.fetchAttendanceSummary(
+        credential(),
+        8,
+        from: DateTime(2026, 11, 1),
+        to: DateTime(2026, 11, 22),
+      );
+      expect(result.present, 1);
+    },
+  );
+  test('child attendance history requests the selected Laravel page', () async {
+    final api = ApiClient(
+      baseUrl: testBase,
+      client: MockClient((r) async {
+        expect(r.url.path, '/api/v1/me/students/8');
+        expect(r.url.queryParameters, {
+          'tab': 'student-attendances',
+          'page': '2',
+        });
+        expect(r.headers['Authorization'], 'Bearer synthetic-test-token');
+        return response({
+          'data': {
+            'student': {
+              'id': 8,
+              'student_number': 'ST-8',
+              'first_name': 'Amina',
+              'last_name': null,
+            },
+            'placement': null,
+            'summary': {
+              'present': 1,
+              'absent': 0,
+              'late': 0,
+              'excused': 0,
+              'total': 1,
+              'unrecorded_days_are_absent': false,
+            },
+            'records': {'data': [], 'current_page': 2, 'last_page': 2},
+          },
+        });
+      }),
+    );
+    addTearDown(api.close);
+    final child = await api.fetchChild(credential(), 8, page: 2);
+    expect(child.page, 2);
+  });
 }

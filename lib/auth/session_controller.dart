@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../api/api_client.dart';
 import '../models/auth_models.dart';
+import '../models/child_models.dart';
 import 'session_store.dart';
 
 enum SessionPhase {
@@ -30,6 +31,42 @@ class SessionController extends ChangeNotifier {
   bool _disposed = false;
   int _generation = 0;
   bool get hasSession => _credential != null;
+  Future<T> _childRequest<T>(
+    Future<T> Function(SessionCredential) action,
+  ) async {
+    if (phase != SessionPhase.authenticated ||
+        capabilities?.canViewChildren != true ||
+        _credential == null) {
+      throw const ApiException(ApiFailure.forbidden);
+    }
+    final generation = _generation;
+    try {
+      final result = await action(_credential!);
+      if (!_current(generation)) {
+        throw const ApiException(ApiFailure.unauthorized);
+      }
+      return result;
+    } on ApiException catch (e) {
+      if (_current(generation) && e.failure == ApiFailure.unauthorized) {
+        invalidSessionNotice = true;
+        await _clear(++_generation);
+      }
+      rethrow;
+    }
+  }
+
+  Future<ChildPage> fetchChildren({int page = 1}) =>
+      _childRequest((credential) => api.fetchChildren(credential, page: page));
+  Future<ChildDetails> fetchChild(int id, {int page = 1}) =>
+      _childRequest((credential) => api.fetchChild(credential, id, page: page));
+  Future<AttendanceSummary> fetchAttendanceSummary(
+    int id, {
+    DateTime? from,
+    DateTime? to,
+  }) => _childRequest(
+    (credential) =>
+        api.fetchAttendanceSummary(credential, id, from: from, to: to),
+  );
   bool get busy => {
     SessionPhase.restoring,
     SessionPhase.signingIn,
