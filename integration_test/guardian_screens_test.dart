@@ -84,10 +84,11 @@ void main() {
                 'first_name': 'Sample',
                 'last_name': 'Student',
                 'status': 'active',
-                'placement': {
+                'current_placement': {
                   'class': {'name': 'Class Seven'},
                   'section': {'name': 'Section A'},
                   'branch': {'name': 'Central'},
+                  'academic_year': {'name': '2026'},
                 },
               },
               {
@@ -111,6 +112,7 @@ void main() {
     await tester.ensureVisible(
       find.text(AppStrings.studentNumber('SAMPLE-0021')),
     );
+    expect(find.text(AppStrings.academicYearValue('2026')), findsOneWidget);
     await _capture(binding, 'guardian-my-children');
 
     await tester.tap(find.text(AppStrings.studentNumber('SAMPLE-0021')));

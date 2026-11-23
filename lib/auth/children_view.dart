@@ -211,6 +211,13 @@ class _ChildCard extends StatelessWidget {
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
+                    if (placement['academic_year'] case final year?)
+                      Text(
+                        AppStrings.academicYearValue(year),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppPalette.secondaryText,
+                        ),
+                      ),
                     if (placement['branch'] case final branch?)
                       Text(
                         AppStrings.branchValue(branch),

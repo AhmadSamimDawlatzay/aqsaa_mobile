@@ -6,11 +6,13 @@ Implemented: public institution bootstrap, email/password login, secure session 
 
 The home screen exposes **My Children** when `capabilities.data.linked_children` contains `students`. Roles and `has_linked_students` do not gate the entry: a guardian with zero links must be able to see a genuine empty state.
 
-- `GET me/students?page=N` returns `data` (explicit child fields) and `meta.current_page/last_page`. The app never fetches the general student directory.
+- `GET me/students?page=N` returns `data` (explicit child fields) and `meta.current_page/last_page`. Each item may include nullable `current_placement` with class, section, branch, and academic year. The app also accepts older responses that omit this field. The app never fetches the general student directory.
 - Tap a child to request `GET me/students/{id}?tab=student-attendances&page=N`. Read `data.student`, nullable `data.placement`, `data.summary`, and the direct Laravel paginator in `data.records`. Placement supplies class, section, program, level, year, and branch names. No exam-score UI is added.
 - Attendance history is paginated. The date picker filters summary totals through `GET students/{id}/attendance-summary?from=YYYY-MM-DD&to=YYYY-MM-DD`; the child-history endpoint currently does not accept date bounds. The date picker caps dates at today, and the server also rejects future `to` dates. Missing attendance records are never treated as absences.
 - Loading, pagination, pull-to-refresh, Refresh, Retry, and empty/error states are distinct. A failed or malformed request is not an empty list. Home Refresh revalidates profile and capabilities. A child-request 401 clears the invalid session; 403/404 only clear that child detail and explain the access issue.
 - Child data stays in widget memory. Logout removes the view; generation checks discard late responses. The server authorizes every request using active `mobile_user_students` links, independently of contact records.
+
+The API selects placement from an active enrollment whose academic year is marked current, using latest enrollment date and id as tie-breakers, matching child details. Historical enrollments do not appear as current placement. Until the backend deployment is updated, the app safely omits these optional card details.
 
 On 2026-11-21, the designated demo guardian's live login returned 201; profile, capabilities, linked list, child details, and attendance summary returned 200; logout returned 204. The list contained three children, including the expected `DEMO-ST-001` (the live account is linked to two more students than the local seeder expectation). Four attendance rows were returned for each checked child. No live links or records were changed. A linked child's placement and attendance were verified on the Android emulator after a full restart with the explicit demo API URL. Session restoration and logout returned to login with no child data displayed. Live authentication and child data were therefore verified; the automated emulator integration tests below use synthetic HTTP responses.
 
@@ -28,7 +30,7 @@ flutter run -d emulator-5554 --dart-define=API_BASE_URL=https://demo.aqsaa.app/a
 
 ## Verified Laravel contract
 
-Source reviewed in `C:\Projects\madrasa`: `AGENTS.md`, `docs/mobile-api-v1.md`, `docs/mobile-api-coverage.md`, routes, `LoginRequest`, `AuthController`, `BootstrapController`, `DeviceController`, the mobile guard in `AppServiceProvider`, active-user middleware, locale request, mobile configuration, and existing API tests. No Laravel code was modified. `php85.bat` runs PHP 8.5.9 and successfully listed the auth routes; do not use the default PHP 8.2 CLI for this backend.
+Source reviewed in `C:\Projects\madrasa`: `AGENTS.md`, `docs/mobile-api-v1.md`, `docs/mobile-api-coverage.md`, routes, `LoginRequest`, `AuthController`, `BootstrapController`, `DeviceController`, guardian workflow services, models, and API tests. `php85.bat` selects the compatible PHP 8.5 runtime; do not use the default PHP 8.2 CLI for this backend.
 
 | Request | Actual contract |
 | --- | --- |
@@ -104,6 +106,14 @@ Unit/widget coverage includes the login request/response, device requirement, cr
 
 `dart format lib test integration_test` completed; `flutter analyze` reported no issues; all 42 unit/widget tests passed; all four guardian integration tests passed on `emulator-5554` using mocked HTTP; and the Android debug APK built successfully with the demo API URL. The normal app was then launched on the emulator and the public institution welcome screen showed **Connected**. The live authenticated guardian flow was verified separately as recorded above; the automated tests do not use the live account.
 
+### Current placement rollout check (2026-11-23)
+
+The designated demo guardian logged in successfully through the Android app; linked children, a child's academic details, attendance history, back navigation, Account, and logout were exercised. Logout returned to the signed-out screen. A separate live login/list/logout check returned HTTP 201/200/204 and three linked children. The live `GET me/students` response does not include `current_placement` on any item yet. The Flutter app accepts this older response, so the placement details remain absent from cards until the Laravel changes are deployed. No student or enrollment data was modified.
+
+Deploy `app/Services/People/GuardianPortalService.php` and `app/Http/Controllers/Api/V1/MobileWorkflowController.php` to enable current placement summaries. Related regression coverage and contract documentation are in `tests/Feature/GuardianWorkflowTest.php`, `docs/mobile-api-v1.md`, and `docs/mobile-api-coverage.md`. No migration is required. Rebuild/release the Flutter app separately if distributing a newer client.
+
+On 2026-11-23, `dart format`, `flutter analyze`, all 44 Flutter tests, the mocked Android guardian navigation test, the Android debug build, PHP syntax checks, and all 12 `GuardianWorkflowTest` cases passed. Laravel Pint was attempted with the PHP 8.5 launcher but could not write its formatted output in the Laravel workspace; this tooling issue does not affect the passing tests or PHP syntax checks.
+
 ## Manual demo verification (designated account only)
 
 The live designated-account flow has already been verified (login, restore, child list/details, attendance summary, and confirmed logout). To repeat it on the emulator, run the command above and sign in only with the authorized demo account using credentials supplied through the approved local channel; do not put them in source code or documentation.
@@ -115,7 +125,7 @@ The live designated-account flow has already been verified (login, restore, chil
 5. Force-stop/reopen while signed in. The app verifies the saved session before showing the student list. A temporary network failure preserves the session and offers retry.
 6. Tap **Log out**. After HTTP 204, the app returns to the login screen and no child data remains visible.
 
-This milestone makes no backend changes and adds no attendance write actions or other business workflows.
+This app remains read-only and adds no attendance write actions or other business workflows.
 
 ### Earlier bootstrap/authentication milestone results (2026-11-17)
 

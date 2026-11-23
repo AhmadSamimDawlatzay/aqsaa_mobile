@@ -15,10 +15,12 @@ class LinkedChild {
     final json = authObject(value);
     final last = json['last_name'];
     if (last != null && last is! String) throw const FormatException();
-    final rawPlacement = json['placement'];
+    final rawPlacement = json.containsKey('current_placement')
+        ? json['current_placement']
+        : json['placement'];
     final placement = <String, String>{};
     if (rawPlacement is Map) {
-      for (final key in ['class', 'section', 'branch']) {
+      for (final key in ['class', 'section', 'branch', 'academic_year']) {
         final entry = rawPlacement[key];
         if (entry is Map && entry['name'] is String) {
           placement[key] = entry['name'] as String;

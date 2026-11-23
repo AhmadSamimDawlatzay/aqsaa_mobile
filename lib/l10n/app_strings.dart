@@ -54,6 +54,7 @@ abstract final class AppStrings {
   static const noAttendanceTitle = 'No attendance yet';
   static String studentNumber(String value) => 'Student number: $value';
   static String branchValue(String value) => 'Branch: $value';
+  static String academicYearValue(String value) => 'Academic year: $value';
   static const noChildren =
       'No students are linked to your account. Contact your institution administrator.';
   static const childAccessRevoked =

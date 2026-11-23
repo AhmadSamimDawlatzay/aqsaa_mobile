@@ -3,6 +3,7 @@ import 'package:aqsaa_mobile/api/api_client.dart';
 import 'package:aqsaa_mobile/auth/session_store.dart';
 import 'package:aqsaa_mobile/l10n/app_strings.dart';
 import 'package:aqsaa_mobile/main.dart';
+import 'package:aqsaa_mobile/models/child_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -23,6 +24,35 @@ Map<String, Object?> page(List<Object?> children, int current, int last) => {
 };
 
 void main() {
+  test(
+    'linked child parses current placement and tolerates omitted or null placement',
+    () {
+      final withPlacement = LinkedChild.fromJson({
+        ...child(1),
+        'current_placement': {
+          'class': {'id': 3, 'name': 'Class Seven'},
+          'section': {'id': 4, 'name': 'Section A'},
+          'branch': {'id': 5, 'name': 'Central'},
+          'academic_year': {'id': 6, 'name': '2026'},
+        },
+      });
+      final omitted = LinkedChild.fromJson(child(2));
+      final nullPlacement = LinkedChild.fromJson({
+        ...child(3),
+        'current_placement': null,
+      });
+
+      expect(withPlacement.placement, {
+        'class': 'Class Seven',
+        'section': 'Section A',
+        'branch': 'Central',
+        'academic_year': '2026',
+      });
+      expect(omitted.placement, isEmpty);
+      expect(nullPlacement.placement, isEmpty);
+    },
+  );
+
   testWidgets(
     'linked capability opens paginated children and authorized details; logout removes them',
     (tester) async {
