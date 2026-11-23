@@ -37,6 +37,7 @@ class SessionStorageException implements Exception {
 class SessionStore {
   SessionStore(this._storage);
   final SecureKeyValueStore _storage;
+  SecureKeyValueStore get storage => _storage;
   static const deviceKey = 'aqsaa.installation.v1';
   String _sessionKey(String scope) =>
       'aqsaa.session.v1.${base64Url.encode(utf8.encode(scope))}';

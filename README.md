@@ -2,6 +2,23 @@
 
 Implemented: public institution bootstrap, email/password login, secure session restoration, guardian linked-child list, placement details, attendance history and summary, and logout. Business records remain read-only; no refresh tokens, Firebase, or push registration are implemented.
 
+## Languages
+
+The current interface is available in پښتو, دری, العربية, and English. A first launch defaults to Pashto. The language selector is available before login and in Account; its value is stored independently from authentication, so it survives logout and app restarts.
+
+| Display language | Flutter locale | Backend locale |
+| --- | --- | --- |
+| پښتو | `ps` | `ps` |
+| دری | `fa` | `fa` |
+| العربية | `ar` | `ar` |
+| English | `en` | `en` |
+
+The compatibility mapper also recognizes an incoming `dr` value as Dari, but the current Laravel API contract uses `fa`. Pashto, Dari, and Arabic use RTL; English uses LTR. Dates remain Gregorian and are formatted by Flutter's locale-aware Material localizations. API dates remain unchanged ISO/Gregorian values. Names, student numbers, email addresses, and institution-entered content are not translated.
+
+The selected language currently remains an app preference. It is not sent to the API because the existing mobile workflow has no documented endpoint for updating a user's locale; no speculative header, query parameter, or profile mutation is added.
+
+Interface translations are centralized in `lib/l10n/app_strings.dart`; locale codes and direction are centralized in `lib/l10n/app_language.dart`. To add a language, add one `AppLanguage` entry, supply every interface string, add it to the backend mapping only if the API supports it, and extend `test/localization_test.dart`. Flutter does not ship Pashto Cupertino strings, so the app includes a focused Pashto Cupertino delegate for built-in labels while using Flutter's official Pashto Material/date localization.
+
 ## Guardian child access
 
 The home screen exposes **My Children** when `capabilities.data.linked_children` contains `students`. Roles and `has_linked_students` do not gate the entry: a guardian with zero links must be able to see a genuine empty state.
@@ -85,7 +102,10 @@ For normal switching, log out successfully first, then enter the other account's
 - `lib/auth/auth_flow.dart`: login form and minimal account home; uses the same branding/card/layout.
 - `lib/auth/children_view.dart`: capability-gated child list, details, paginated attendance, summary date filter, pull-to-refresh, and child-specific errors.
 - `lib/models/child_models.dart`: typed linked-child, placement, attendance-summary, and attendance-history data.
-- `lib/l10n/app_strings.dart`: all visible copy, ready for future Pashto (`ps`), Dari (`fa`), Arabic (`ar`), and English (`en`) translations. Current copy is English/LTR; RTL layouts are tested, not translated yet.
+- `lib/l10n/app_strings.dart`: centralized Pashto (`ps`), Dari (`fa`), Arabic (`ar`), and English (`en`) interface translations.
+- `lib/l10n/app_language.dart`: the explicit Flutter/backend locale mapping and text direction.
+- `lib/l10n/locale_controller.dart`: Pashto default plus selection restoration and persistence independent of authentication.
+- `lib/l10n/pashto_cupertino_localizations.dart`: focused Pashto labels for Cupertino widgets not covered by Flutter's SDK.
 - `test/`: API/parser, storage, controller, child workflow, and widget tests. Synthetic credentials exist only in test fixtures and never reach the demo API.
 - `integration_test/`: Android secure-storage and guardian workflow checks with mocked HTTP; these do not change live data.
 

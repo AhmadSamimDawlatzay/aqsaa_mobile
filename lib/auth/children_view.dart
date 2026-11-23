@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart' show NumberFormat;
 import '../api/api_client.dart';
 import '../l10n/app_strings.dart';
 import '../models/auth_models.dart';
@@ -131,17 +132,19 @@ class _ChildrenViewState extends State<ChildrenView> {
             TextButton.icon(
               onPressed: data.page > 1 ? () => _load(data.page - 1) : null,
               icon: const Icon(Icons.chevron_left),
-              label: const Text(AppStrings.previous),
+              label: Text(AppStrings.previous),
             ),
             const Spacer(),
-            Text('${data.page} / ${data.lastPage}'),
+            Text(
+              '${_localizedNumber(context, data.page)} / ${_localizedNumber(context, data.lastPage)}',
+            ),
             const Spacer(),
             TextButton.icon(
               onPressed: data.page < data.lastPage
                   ? () => _load(data.page + 1)
                   : null,
               icon: const Icon(Icons.chevron_right),
-              label: const Text(AppStrings.next),
+              label: Text(AppStrings.next),
               iconAlignment: IconAlignment.end,
             ),
           ],
@@ -400,7 +403,7 @@ class _ChildDetailsScreenState extends State<ChildDetailsScreen> {
             ),
           ),
           icon: const Icon(Icons.fact_check_outlined),
-          label: const Text(AppStrings.viewAttendance),
+          label: Text(AppStrings.viewAttendance),
         ),
       ],
     );
@@ -640,17 +643,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       ? () => _loadHistoryPage(_details.page - 1)
                       : null,
                   icon: const Icon(Icons.chevron_left),
-                  label: const Text(AppStrings.previous),
+                  label: Text(AppStrings.previous),
                 ),
                 const Spacer(),
-                Text('${_details.page} / ${_details.lastPage}'),
+                Text(
+                  '${_localizedNumber(context, _details.page)} / ${_localizedNumber(context, _details.lastPage)}',
+                ),
                 const Spacer(),
                 TextButton.icon(
                   onPressed: _details.page < _details.lastPage
                       ? () => _loadHistoryPage(_details.page + 1)
                       : null,
                   icon: const Icon(Icons.chevron_right),
-                  label: const Text(AppStrings.next),
+                  label: Text(AppStrings.next),
                   iconAlignment: IconAlignment.end,
                 ),
               ],
@@ -748,7 +753,7 @@ class _SummaryCount extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              '$count',
+              _localizedNumber(context, count),
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 color: color,
                 fontWeight: FontWeight.w700,
@@ -812,7 +817,7 @@ class _SummaryFailure extends StatelessWidget {
       TextButton.icon(
         onPressed: onRetry,
         icon: const Icon(Icons.refresh),
-        label: const Text(AppStrings.retry),
+        label: Text(AppStrings.retry),
       ),
     ],
   );
@@ -835,9 +840,14 @@ class _FeatureError extends StatelessWidget {
         FilledButton.icon(
           onPressed: onRetry,
           icon: const Icon(Icons.refresh),
-          label: const Text(AppStrings.retry),
+          label: Text(AppStrings.retry),
         ),
       ],
     ),
   );
 }
+
+String _localizedNumber(BuildContext context, num value) =>
+    NumberFormat.decimalPattern(
+      Localizations.localeOf(context).toLanguageTag(),
+    ).format(value);

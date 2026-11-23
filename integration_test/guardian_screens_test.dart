@@ -1,6 +1,8 @@
 import 'package:aqsaa_mobile/api/api_client.dart';
 import 'package:aqsaa_mobile/auth/session_store.dart';
 import 'package:aqsaa_mobile/l10n/app_strings.dart';
+import 'package:aqsaa_mobile/l10n/app_language.dart';
+import 'package:aqsaa_mobile/l10n/locale_controller.dart';
 import 'package:aqsaa_mobile/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,12 +14,40 @@ import '../test/support/auth_fixtures.dart';
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
+  testWidgets('captures welcome and login in every language', (tester) async {
+    await binding.convertFlutterSurfaceToImage();
+    final memory = MemorySecureStore();
+    final store = SessionStore(memory);
+    final locale = LocaleController(memory);
+    final api = ApiClient(
+      baseUrl: testBase,
+      client: MockClient((request) async => jsonResponse()),
+    );
+    addTearDown(api.close);
+    await tester.pumpWidget(
+      AqsaaApp(client: api, sessionStore: store, localeController: locale),
+    );
+    await tester.pumpAndSettle();
+
+    for (final language in AppLanguage.values) {
+      await locale.select(language);
+      await tester.pumpAndSettle();
+      await _capture(binding, '${language.backendCode}-welcome');
+      await tester.tap(find.text(AppStrings.login).last);
+      await tester.pumpAndSettle();
+      await _capture(binding, '${language.backendCode}-login');
+      await tester.tap(find.text(AppStrings.back));
+      await tester.pumpAndSettle();
+    }
+  });
+
   testWidgets('captures guardian navigation screens with mock data', (
     tester,
   ) async {
     await binding.convertFlutterSurfaceToImage();
     final store = SessionStore(MemorySecureStore());
     await store.save(credential());
+    final locale = LocaleController(store.storage);
     final api = ApiClient(
       baseUrl: testBase,
       client: MockClient((request) async {
@@ -107,32 +137,45 @@ void main() {
     );
     addTearDown(api.close);
 
-    await tester.pumpWidget(AqsaaApp(client: api, sessionStore: store));
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(
-      find.text(AppStrings.studentNumber('SAMPLE-0021')),
+    await tester.pumpWidget(
+      AqsaaApp(client: api, sessionStore: store, localeController: locale),
     );
-    expect(find.text(AppStrings.academicYearValue('2026')), findsOneWidget);
-    await _capture(binding, 'guardian-my-children');
+    await tester.pumpAndSettle();
+    for (final language in AppLanguage.values) {
+      await locale.select(language);
+      await tester.pumpAndSettle();
+      final suffix = language.backendCode;
+      await tester.ensureVisible(
+        find.text(AppStrings.studentNumber('SAMPLE-0021')),
+      );
+      expect(find.text(AppStrings.academicYearValue('2026')), findsOneWidget);
+      await _capture(binding, '$suffix-my-children');
 
-    await tester.tap(find.text(AppStrings.studentNumber('SAMPLE-0021')));
-    await tester.pumpAndSettle();
-    await _capture(binding, 'guardian-child-details');
+      await tester.tap(find.text(AppStrings.studentNumber('SAMPLE-0021')));
+      await tester.pumpAndSettle();
+      await _capture(binding, '$suffix-child-details');
 
-    await tester.ensureVisible(find.text(AppStrings.viewAttendance));
-    await tester.tap(find.text(AppStrings.viewAttendance));
-    await tester.pumpAndSettle();
-    await _capture(binding, 'guardian-attendance');
+      await tester.ensureVisible(find.text(AppStrings.viewAttendance));
+      await tester.tap(find.text(AppStrings.viewAttendance));
+      await tester.pumpAndSettle();
+      await _capture(binding, '$suffix-attendance');
 
-    Navigator.of(tester.element(find.text(AppStrings.attendanceHeading))).pop();
-    await tester.pumpAndSettle();
-    Navigator.of(
-      tester.element(find.text(AppStrings.academicInformation)),
-    ).pop();
-    await tester.pumpAndSettle();
-    await tester.tap(find.text(AppStrings.accountTab).last);
-    await tester.pumpAndSettle();
-    await _capture(binding, 'guardian-account');
+      Navigator.of(
+        tester.element(find.text(AppStrings.attendanceHeading)),
+      ).pop();
+      await tester.pumpAndSettle();
+      Navigator.of(
+        tester.element(find.text(AppStrings.academicInformation)),
+      ).pop();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(AppStrings.accountTab).last);
+      await tester.pumpAndSettle();
+      await _capture(binding, '$suffix-account');
+      if (language != AppLanguage.values.last) {
+        await tester.tap(find.text(AppStrings.childrenTab).last);
+        await tester.pumpAndSettle();
+      }
+    }
   });
 }
 
@@ -142,5 +185,5 @@ Future<void> _capture(
 ) async {
   await binding.takeScreenshot(name);
   debugPrint('SCREENSHOT_READY:$name');
-  await Future<void>.delayed(const Duration(seconds: 14));
+  await Future<void>.delayed(const Duration(milliseconds: 400));
 }

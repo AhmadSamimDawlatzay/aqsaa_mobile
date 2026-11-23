@@ -73,7 +73,9 @@ void main() {
       loginPending.complete(response(loginJson(), 201));
       await tester.pumpAndSettle();
       expect(find.text('Test User'), findsOneWidget);
-      expect(find.text('Teacher'), findsOneWidget);
+      expect(find.text(AppStrings.roleLabel('Teacher')), findsOneWidget);
+      await tester.drag(find.byType(ListView).last, const Offset(0, -500));
+      await tester.pumpAndSettle();
       await tester.ensureVisible(find.text(AppStrings.logout));
       await tester.tap(find.text(AppStrings.logout));
       await tester.pumpAndSettle();
@@ -104,9 +106,9 @@ void main() {
     addTearDown(api.close);
     await tester.pumpWidget(AqsaaApp(client: api, sessionStore: store));
     await tester.pumpAndSettle();
-    expect(find.text(AppStrings.noCapabilities), findsOneWidget);
     await tester.drag(find.byType(ListView).last, const Offset(0, -500));
     await tester.pumpAndSettle();
+    expect(find.text(AppStrings.noCapabilities), findsOneWidget);
     await tester.ensureVisible(find.text(AppStrings.logout));
     expect(find.text(AppStrings.logout), findsOneWidget);
     expect(find.byType(TextFormField), findsNothing);
@@ -126,6 +128,8 @@ void main() {
     );
     addTearDown(api.close);
     await tester.pumpWidget(AqsaaApp(client: api, sessionStore: store));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView).last, const Offset(0, -500));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text(AppStrings.logout));
     await tester.tap(find.text(AppStrings.logout));

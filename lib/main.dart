@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'api/api_client.dart';
 import 'l10n/app_strings.dart';
+import 'l10n/app_language.dart';
+import 'l10n/locale_controller.dart';
+import 'l10n/pashto_cupertino_localizations.dart';
 import 'models/bootstrap_response.dart';
 import 'auth/auth_flow.dart';
 import 'auth/session_store.dart';
@@ -12,25 +16,71 @@ void main() {
   runApp(const AqsaaApp());
 }
 
-class AqsaaApp extends StatelessWidget {
+class AqsaaApp extends StatefulWidget {
   const AqsaaApp({
     super.key,
     this.client,
     this.sessionStore,
-    this.textDirection = TextDirection.ltr,
+    this.localeController,
+    this.textDirection,
   });
   final ApiClient? client;
   final SessionStore? sessionStore;
-  final TextDirection textDirection;
+  final LocaleController? localeController;
+  final TextDirection? textDirection;
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: AppStrings.appName,
-    debugShowCheckedModeBanner: false,
-    theme: AqsaaTheme.light,
-    builder: (context, child) =>
-        Directionality(textDirection: textDirection, child: child!),
-    home: ConnectionScreen(client: client, sessionStore: sessionStore),
+  State<AqsaaApp> createState() => _AqsaaAppState();
+}
+
+class _AqsaaAppState extends State<AqsaaApp> {
+  late final SessionStore _sessionStore;
+  late final LocaleController _localeController;
+
+  @override
+  void initState() {
+    super.initState();
+    _sessionStore = widget.sessionStore ?? SessionStore(PlatformSecureStore());
+    _localeController =
+        widget.localeController ?? LocaleController(_sessionStore.storage);
+    _localeController.restore();
+  }
+
+  @override
+  void dispose() {
+    if (widget.localeController == null) _localeController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => LocaleScope(
+    controller: _localeController,
+    child: ListenableBuilder(
+      listenable: _localeController,
+      builder: (context, _) => MaterialApp(
+        title: AppStrings.appName,
+        debugShowCheckedModeBanner: false,
+        theme: AqsaaTheme.light,
+        locale: _localeController.locale,
+        supportedLocales: AppLanguage.values.map((value) => value.locale),
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          PashtoCupertinoLocalizationsDelegate(),
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        builder: widget.textDirection == null
+            ? null
+            : (context, child) => Directionality(
+                textDirection: widget.textDirection!,
+                child: child!,
+              ),
+        home: ConnectionScreen(
+          client: widget.client,
+          sessionStore: _sessionStore,
+        ),
+      ),
+    ),
   );
 }
 
@@ -89,7 +139,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
       }
       if (snapshot.hasError) {
         return Scaffold(
-          appBar: AppBar(title: const Text(AppStrings.appName)),
+          appBar: AppBar(title: Text(AppStrings.appName)),
           body: AppPageFrame(
             child: Center(
               child: Column(
@@ -114,7 +164,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
                   FilledButton.icon(
                     onPressed: _retry,
                     icon: const Icon(Icons.refresh),
-                    label: const Text(AppStrings.retry),
+                    label: Text(AppStrings.retry),
                   ),
                 ],
               ),

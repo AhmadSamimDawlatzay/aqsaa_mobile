@@ -4,6 +4,7 @@ import '../l10n/app_strings.dart';
 import '../models/bootstrap_response.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_components.dart';
+import '../widgets/language_selector.dart';
 import 'session_controller.dart';
 import 'session_store.dart';
 import 'children_view.dart';
@@ -99,12 +100,12 @@ class _AuthFlowState extends State<AuthFlow> {
                   const SizedBox(height: 18),
                   FilledButton(
                     onPressed: session.retry,
-                    child: const Text(AppStrings.retry),
+                    child: Text(AppStrings.retry),
                   ),
                   if (session.hasSession && !session.logoutUnconfirmed)
                     TextButton(
                       onPressed: session.logout,
-                      child: const Text(AppStrings.logout),
+                      child: Text(AppStrings.logout),
                     ),
                 ],
               ),
@@ -128,6 +129,8 @@ class _AuthFlowState extends State<AuthFlow> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 20),
+              const LanguageSelector(compact: true),
+              const SizedBox(height: 18),
               Center(child: widget.branding),
               const SizedBox(height: 18),
               AppPageHeading(
@@ -170,13 +173,13 @@ class _AuthFlowState extends State<AuthFlow> {
                             FilledButton.icon(
                               onPressed: session.openLogin,
                               icon: const Icon(Icons.login),
-                              label: const Text(AppStrings.login),
+                              label: Text(AppStrings.login),
                             ),
                             const SizedBox(height: 6),
                             TextButton.icon(
                               onPressed: widget.onRetryBootstrap,
                               icon: const Icon(Icons.refresh),
-                              label: const Text(AppStrings.refresh),
+                              label: Text(AppStrings.refresh),
                             ),
                           ],
                         ),
@@ -210,7 +213,7 @@ class _AuthenticatedLayoutState extends State<_AuthenticatedLayout> {
     final profile = widget.session.profile!;
     final canViewChildren = widget.session.capabilities!.canViewChildren;
     final destinations = canViewChildren
-        ? const [
+        ? [
             NavigationDestination(
               icon: Icon(Icons.people_outline),
               selectedIcon: Icon(Icons.people),
@@ -222,10 +225,10 @@ class _AuthenticatedLayoutState extends State<_AuthenticatedLayout> {
               label: AppStrings.accountTab,
             ),
           ]
-        : const <NavigationDestination>[];
+        : <NavigationDestination>[];
 
     return Scaffold(
-      appBar: AppBar(title: const Text(AppStrings.appName)),
+      appBar: AppBar(title: Text(AppStrings.appName)),
       body: canViewChildren
           ? IndexedStack(
               index: _destination,
@@ -291,6 +294,7 @@ class AccountView extends StatelessWidget {
                 label: AppStrings.email,
                 value: session.profile!.email,
                 icon: Icons.mail_outline,
+                valueTextDirection: TextDirection.ltr,
               ),
               if (session.profile!.roles.isNotEmpty) ...[
                 const SizedBox(height: 8),
@@ -300,7 +304,7 @@ class AccountView extends StatelessWidget {
                   children: session.profile!.roles
                       .map(
                         (role) => Chip(
-                          label: Text(role),
+                          label: Text(AppStrings.roleLabel(role)),
                           visualDensity: VisualDensity.compact,
                         ),
                       )
@@ -321,6 +325,12 @@ class AccountView extends StatelessWidget {
             ),
           ),
         ],
+        const SizedBox(height: AppSpacing.section),
+        AppSectionCard(
+          title: AppStrings.language,
+          icon: Icons.language,
+          child: const LanguageSelector(compact: true),
+        ),
         if (!session.capabilities!.hasSupportedAccess) ...[
           const SizedBox(height: AppSpacing.section),
           Text(AppStrings.noCapabilities),
@@ -329,7 +339,7 @@ class AccountView extends StatelessWidget {
         OutlinedButton.icon(
           onPressed: session.logout,
           icon: const Icon(Icons.logout),
-          label: const Text(AppStrings.logout),
+          label: Text(AppStrings.logout),
         ),
       ],
     ),
@@ -372,13 +382,13 @@ class _LoginFormState extends State<LoginForm> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (session.invalidSessionNotice) ...[
-            const Text(AppStrings.invalidSession),
+            Text(AppStrings.invalidSession),
             const SizedBox(height: 16),
           ],
           TextFormField(
             controller: _email,
             enabled: !session.busy,
-            decoration: const InputDecoration(labelText: AppStrings.email),
+            decoration: InputDecoration(labelText: AppStrings.email),
             keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.next,
             autocorrect: false,
@@ -441,11 +451,11 @@ class _LoginFormState extends State<LoginForm> {
                     height: 22,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text(AppStrings.login),
+                : Text(AppStrings.login),
           ),
           TextButton(
             onPressed: session.busy ? null : session.backToWelcome,
-            child: const Text(AppStrings.back),
+            child: Text(AppStrings.back),
           ),
         ],
       ),

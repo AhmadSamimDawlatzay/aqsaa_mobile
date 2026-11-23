@@ -132,7 +132,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Class One'), findsOneWidget);
       expect(find.text('Section A'), findsOneWidget);
-      expect(find.text('Active'), findsOneWidget);
+      expect(find.text(AppStrings.enrollmentStatus('active')), findsOneWidget);
       expect(
         find.text(AppStrings.placementLabels['enrolled_at']!),
         findsOneWidget,
@@ -147,7 +147,17 @@ void main() {
       expect(find.text(AppStrings.present), findsWidgets);
       await tester.drag(find.byType(ListView).last, const Offset(0, -520));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Nov 20'), findsOneWidget);
+      final attendanceContext = tester.element(
+        find.text(AppStrings.attendanceHistoryAllDates),
+      );
+      expect(
+        find.text(
+          MaterialLocalizations.of(
+            attendanceContext,
+          ).formatMediumDate(DateTime(2026, 11, 20)),
+        ),
+        findsOneWidget,
+      );
       Navigator.of(
         tester.element(find.text(AppStrings.attendanceHeading)),
       ).pop();

@@ -119,10 +119,12 @@ class AppInfoRow extends StatelessWidget {
     required this.label,
     required this.value,
     this.icon,
+    this.valueTextDirection,
   });
   final String label;
   final String value;
   final IconData? icon;
+  final TextDirection? valueTextDirection;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -147,6 +149,7 @@ class AppInfoRow extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 value,
+                textDirection: valueTextDirection,
                 style: Theme.of(
                   context,
                 ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
