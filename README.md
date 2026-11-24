@@ -43,6 +43,36 @@ flutter pub get
 flutter run -d emulator-5554 --dart-define=API_BASE_URL=https://demo.aqsaa.app/api/v1
 ```
 
+## Notification inbox
+
+Guardian-capable accounts (advertised by `linked_children` containing `students`) receive a Notifications destination beside My Children and Account. The inbox uses the authenticated Laravel contract:
+
+| Request | Purpose |
+| --- | --- |
+| `GET notifications?page=N&per_page=25` | Newest-first Laravel `data`/`links`/`meta` page; `per_page` is bounded by the server to 1–100. |
+| `GET notifications/unread-count` | Authoritative unread total, independent of loaded pages. |
+| `PATCH notifications/{id}/read` | Revalidates visibility and marks one notification read. |
+| `PATCH notifications/read-all` | Marks every currently visible notification read and returns 204. |
+
+List items accept the allowlisted fields `id`, `event_type`, nullable `student`, `translation_key`, `translation_params`, nullable `deep_link`, nullable `title`/`body`, nullable `read_at`, and `created_at`. Known guardian events are `attendance_absent`, `attendance_corrected`, `released_result`, `promotion_committed`, and `transfer_approved`. Unknown types remain readable with a generic icon and server text.
+
+Only a `v1` `guardian.student` descriptor whose student ID matches the returned student summary is actionable. Absence/correction opens the existing attendance screen after an authorized child re-fetch. Promotion and transfer open child details, which also re-fetches access. Released results remain detail-only because the Flutter app has no authorized results screen yet. Arbitrary URLs are never opened, and a descriptor is never treated as authorization.
+
+The inbox refreshes after session validation, when opened, through pull-to-refresh, and on app resume with a 30-second throttle. It does not poll. Page merges deduplicate by notification ID; a first-page refresh replaces the visible collection so revoked-link notices disappear. Read state changes only after server success, and the unread count is fetched again after read actions. Items, counts, and detail state are memory-only and are discarded with the authenticated layout on logout or account/server change.
+
+Known structured translation keys are rendered in the selected Pashto (`ps`), Dari (`fa`), Arabic (`ar`), or English (`en`) UI language. Unknown keys fall back to safe stored title/body text, never to a raw key. Laravel currently stores title/body in the user's locale when the event is created and exposes no per-request notification locale negotiation. The API controller also omits the stored `format: guardian.v1` field, so Flutter version-gates actions using the returned deep-link `version` and treats unsupported descriptors as display-only.
+
+Manual verification:
+
+1. Sign in with an authorized guardian test account and open Notifications.
+2. Confirm the badge is absent for zero, shows the server total for unread items, and caps visually at `99+`.
+3. Pull to refresh, open an unread item, return, and confirm its styling and server count update.
+4. Test Attendance or Child details only when the descriptor offers it; confirm 403/404 leaves the session signed in and explains unavailable access.
+5. Use Account to switch all four languages and confirm the inbox/detail remain open, with RTL for Pashto, Dari, and Arabic.
+6. Log out and sign in as another account; confirm no previous items or count remain.
+
+Firebase push delivery and an authorized results screen are separate future milestones. The inbox does not generate events or register push delivery.
+
 `API_BASE_URL` **includes `/api/v1`**. The client appends paths such as `bootstrap` and `auth/login` exactly once. A trailing slash is accepted. HTTPS is required; certificate validation remains enabled. This demo URL is the default. Restart/rebuild after changing a dart-define.
 
 ## Verified Laravel contract

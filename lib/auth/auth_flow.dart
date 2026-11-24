@@ -8,6 +8,8 @@ import '../widgets/language_selector.dart';
 import 'session_controller.dart';
 import 'session_store.dart';
 import 'children_view.dart';
+import 'notification_inbox_controller.dart';
+import 'notifications_view.dart';
 
 class AuthFlow extends StatefulWidget {
   const AuthFlow({
@@ -205,8 +207,44 @@ class _AuthenticatedLayout extends StatefulWidget {
   State<_AuthenticatedLayout> createState() => _AuthenticatedLayoutState();
 }
 
-class _AuthenticatedLayoutState extends State<_AuthenticatedLayout> {
+class _AuthenticatedLayoutState extends State<_AuthenticatedLayout>
+    with WidgetsBindingObserver {
   int _destination = 0;
+  late final NotificationInboxController notifications;
+  DateTime? _lastResumeRefresh;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    notifications = NotificationInboxController(session: widget.session);
+    if (widget.session.capabilities!.canViewChildren) {
+      notifications.initialize();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed ||
+        !widget.session.capabilities!.canViewChildren) {
+      return;
+    }
+    final now = DateTime.now();
+    if (_lastResumeRefresh != null &&
+        now.difference(_lastResumeRefresh!) < const Duration(seconds: 30)) {
+      return;
+    }
+    _lastResumeRefresh = now;
+    notifications.refresh();
+    notifications.refreshUnreadCount();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    notifications.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -218,6 +256,17 @@ class _AuthenticatedLayoutState extends State<_AuthenticatedLayout> {
               icon: Icon(Icons.people_outline),
               selectedIcon: Icon(Icons.people),
               label: AppStrings.childrenTab,
+            ),
+            NavigationDestination(
+              icon: _NotificationNavigationIcon(
+                controller: notifications,
+                selected: false,
+              ),
+              selectedIcon: _NotificationNavigationIcon(
+                controller: notifications,
+                selected: true,
+              ),
+              label: AppStrings.notifications,
             ),
             NavigationDestination(
               icon: Icon(Icons.account_circle_outlined),
@@ -239,6 +288,10 @@ class _AuthenticatedLayoutState extends State<_AuthenticatedLayout> {
                   institution: widget.institution,
                   profile: profile,
                 ),
+                NotificationsView(
+                  controller: notifications,
+                  session: widget.session,
+                ),
                 AccountView(
                   session: widget.session,
                   institution: widget.institution,
@@ -253,12 +306,43 @@ class _AuthenticatedLayoutState extends State<_AuthenticatedLayout> {
           ? NavigationBar(
               selectedIndex: _destination,
               destinations: destinations,
-              onDestinationSelected: (index) =>
-                  setState(() => _destination = index),
+              onDestinationSelected: (index) {
+                setState(() => _destination = index);
+                if (index == 1) {
+                  notifications.refresh();
+                  notifications.refreshUnreadCount();
+                }
+              },
             )
           : null,
     );
   }
+}
+
+class _NotificationNavigationIcon extends StatelessWidget {
+  const _NotificationNavigationIcon({
+    required this.controller,
+    required this.selected,
+  });
+  final NotificationInboxController controller;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: controller,
+    builder: (context, _) {
+      final count = controller.unreadCount;
+      final icon = Icon(
+        selected ? Icons.notifications : Icons.notifications_outlined,
+      );
+      if (count == null || count == 0) return icon;
+      final value = count > 99 ? '99+' : '$count';
+      return Semantics(
+        label: AppStrings.unreadNotificationCount(count),
+        child: Badge(label: Text(value), child: icon),
+      );
+    },
+  );
 }
 
 class AccountView extends StatelessWidget {

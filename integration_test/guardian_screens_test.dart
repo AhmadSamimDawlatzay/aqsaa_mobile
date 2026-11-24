@@ -4,6 +4,7 @@ import 'package:aqsaa_mobile/l10n/app_strings.dart';
 import 'package:aqsaa_mobile/l10n/app_language.dart';
 import 'package:aqsaa_mobile/l10n/locale_controller.dart';
 import 'package:aqsaa_mobile/main.dart';
+import 'package:aqsaa_mobile/models/notification_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/testing.dart';
@@ -132,6 +133,47 @@ void main() {
             'meta': {'current_page': 1, 'last_page': 1},
           });
         }
+        if (path.endsWith('notifications/unread-count')) {
+          return response({
+            'data': {'count': 1},
+          });
+        }
+        if (path.endsWith('notifications/fixture-notice/read')) {
+          return response({
+            'data': {
+              'id': 'fixture-notice',
+              'read_at': '2026-11-23T09:00:00.000000Z',
+            },
+          });
+        }
+        if (path.endsWith('notifications')) {
+          return response({
+            'data': [
+              {
+                'id': 'fixture-notice',
+                'event_type': 'attendance_absent',
+                'student': {
+                  'id': 21,
+                  'student_number': 'SAMPLE-0021',
+                  'name': 'Sample Student',
+                },
+                'translation_key': 'guardian.attendance_absent',
+                'translation_params': {'student': 'Sample Student'},
+                'deep_link': {
+                  'version': 'v1',
+                  'route': 'guardian.student',
+                  'student_id': 21,
+                  'tab': 'student-attendances',
+                },
+                'title': 'Attendance update',
+                'body': 'Sample Student was recorded absent.',
+                'read_at': null,
+                'created_at': '2026-11-23T07:00:00.000000Z',
+              },
+            ],
+            'meta': {'current_page': 1, 'last_page': 1},
+          });
+        }
         return authResponse(request);
       }),
     );
@@ -166,6 +208,30 @@ void main() {
       await tester.pumpAndSettle();
       Navigator.of(
         tester.element(find.text(AppStrings.academicInformation)),
+      ).pop();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(AppStrings.notifications).last);
+      await tester.pumpAndSettle();
+      await _capture(binding, '$suffix-notifications');
+      await tester.tap(
+        find.text(
+          AppStrings.notificationTitle(
+            InboxNotification.fromJson({
+              'id': 'fixture-notice',
+              'event_type': 'attendance_absent',
+              'translation_key': 'guardian.attendance_absent',
+              'translation_params': {'student': 'Sample Student'},
+              'title': 'Attendance update',
+              'body': 'Sample Student was recorded absent.',
+              'created_at': '2026-11-23T07:00:00.000000Z',
+            }),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _capture(binding, '$suffix-notification-detail');
+      Navigator.of(
+        tester.element(find.text(AppStrings.notificationDetails)),
       ).pop();
       await tester.pumpAndSettle();
       await tester.tap(find.text(AppStrings.accountTab).last);

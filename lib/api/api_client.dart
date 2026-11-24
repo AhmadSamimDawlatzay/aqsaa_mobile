@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import '../models/bootstrap_response.dart';
 import '../models/auth_models.dart';
 import '../models/child_models.dart';
+import '../models/notification_models.dart';
 
 enum ApiFailure {
   configuration,
@@ -155,6 +156,54 @@ class ApiClient {
       ),
     );
   });
+
+  Future<NotificationPage> fetchNotifications(
+    SessionCredential session, {
+    int page = 1,
+    int perPage = 25,
+  }) => _parse(
+    () async => NotificationPage.fromJson(
+      await _request(
+        'GET',
+        'notifications?page=$page&per_page=$perPage',
+        session: session,
+      ),
+    ),
+  );
+
+  Future<int> fetchUnreadNotificationCount(SessionCredential session) =>
+      _parse(() async {
+        final response = authObject(
+          await _request('GET', 'notifications/unread-count', session: session),
+        );
+        final count = authInt(authObject(response['data'])['count']);
+        if (count < 0) throw const FormatException('Invalid unread count');
+        return count;
+      });
+
+  Future<DateTime> markNotificationRead(SessionCredential session, String id) =>
+      _parse(() async {
+        final encodedId = Uri.encodeComponent(id);
+        final response = authObject(
+          await _request(
+            'PATCH',
+            'notifications/$encodedId/read',
+            session: session,
+          ),
+        );
+        final data = authObject(response['data']);
+        if (authString(data['id']) != id) {
+          throw const FormatException('Notification ID mismatch');
+        }
+        return DateTime.parse(authString(data['read_at']));
+      });
+
+  Future<void> markAllNotificationsRead(SessionCredential session) => _request(
+    'PATCH',
+    'notifications/read-all',
+    session: session,
+    expectedStatus: 204,
+  );
 
   String _date(DateTime date) =>
       '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';

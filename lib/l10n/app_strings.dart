@@ -1,5 +1,6 @@
 import '../api/api_client.dart';
 import '../auth/session_store.dart';
+import '../models/notification_models.dart';
 import 'app_language.dart';
 
 abstract final class AppStrings {
@@ -282,6 +283,192 @@ abstract final class AppStrings {
   static String get selectLanguage =>
       _s('Select language', 'ژبه وټاکئ', 'انتخاب زبان', 'اختر اللغة');
 
+  static String get notifications =>
+      _s('Notifications', 'خبرتیاوې', 'اطلاعیه‌ها', 'الإشعارات');
+  static String get notificationsSubtitle => _s(
+    'Updates about your linked children.',
+    'ستاسو له تړلو ماشومانو سره اړوند تازه خبرونه.',
+    'تازه‌ترین خبرها درباره فرزندان پیوندشده شما.',
+    'آخر التحديثات المتعلقة بأبنائك المرتبطين.',
+  );
+  static String get loadingNotifications => _s(
+    'Loading notifications…',
+    'خبرتیاوې راوړل کېږي…',
+    'اطلاعیه‌ها در حال دریافت است…',
+    'جارٍ تحميل الإشعارات…',
+  );
+  static String get notificationsUnavailable => _s(
+    'Notifications unavailable',
+    'خبرتیاوې شتون نه لري',
+    'اطلاعیه‌ها در دسترس نیست',
+    'الإشعارات غير متاحة',
+  );
+  static String get noNotificationsTitle => _s(
+    'No notifications yet',
+    'تر اوسه خبرتیا نشته',
+    'هنوز اطلاعیه‌ای نیست',
+    'لا توجد إشعارات بعد',
+  );
+  static String get noNotifications => _s(
+    'New guardian updates will appear here.',
+    'د سرپرستۍ نوې خبرتیاوې به دلته ښکاره شي.',
+    'اطلاعیه‌های جدید سرپرست در اینجا نمایش داده می‌شود.',
+    'ستظهر تحديثات ولي الأمر الجديدة هنا.',
+  );
+  static String get markAllRead => _s(
+    'Mark all as read',
+    'ټولې لوستل شوې وښایئ',
+    'علامت‌گذاری همه به‌عنوان خوانده‌شده',
+    'تحديد الكل كمقروء',
+  );
+  static String get loadMore =>
+      _s('Load more', 'نور راوړئ', 'نمایش بیشتر', 'تحميل المزيد');
+  static String get notificationDetails => _s(
+    'Notification details',
+    'د خبرتیا معلومات',
+    'جزئیات اطلاعیه',
+    'تفاصيل الإشعار',
+  );
+  static String get unreadNotification => _s(
+    'Unread notification',
+    'نه لوستل شوې خبرتیا',
+    'اطلاعیه خوانده‌نشده',
+    'إشعار غير مقروء',
+  );
+  static String get readNotification => _s(
+    'Read notification',
+    'لوستل شوې خبرتیا',
+    'اطلاعیه خوانده‌شده',
+    'إشعار مقروء',
+  );
+  static String get notificationReadFailed => _s(
+    'The notification opened, but its read status could not be updated.',
+    'خبرتیا خلاصه شوه، خو د لوستلو حالت یې تازه نه شو.',
+    'اطلاعیه باز شد، اما وضعیت خواندن آن به‌روز نشد.',
+    'فُتح الإشعار، لكن تعذر تحديث حالة القراءة.',
+  );
+  static String get notificationNoLongerAvailable => _s(
+    'This notification is no longer available.',
+    'دا خبرتیا نور شتون نه لري.',
+    'این اطلاعیه دیگر در دسترس نیست.',
+    'لم يعد هذا الإشعار متاحًا.',
+  );
+  static String get notificationTargetUnavailable => _s(
+    'The related student record is no longer available to this account.',
+    'اړوند زده کوونکي ته د دې حساب لاسرسی نور نشته.',
+    'سابقه مرتبط شاگرد دیگر برای این حساب در دسترس نیست.',
+    'لم يعد سجل الطالب المرتبط متاحًا لهذا الحساب.',
+  );
+  static String get resultsDestinationUnavailable => _s(
+    'Results navigation will be available when the authorized results screen is added.',
+    'د پایلو پاڼه به هغه وخت پرانیستل شي چې د اجازې لرونکې پایلو برخه جوړه شي.',
+    'پس از افزودن صفحه مجاز نتایج، دسترسی به نتایج فراهم می‌شود.',
+    'سيتوفر الانتقال إلى النتائج عند إضافة شاشة النتائج المصرح بها.',
+  );
+  static String get viewChildDetails => _s(
+    'View child details',
+    'د ماشوم معلومات وګورئ',
+    'مشاهده جزئیات فرزند',
+    'عرض تفاصيل الابن',
+  );
+  static String get student => _s('Student', 'زده کوونکی', 'شاگرد', 'الطالب');
+  static String get studentNumberLabel =>
+      _s('Student number', 'د زده کوونکي شمېره', 'شماره شاگرد', 'رقم الطالب');
+
+  static String unreadNotificationCount(int count) => _s(
+    '$count unread notifications',
+    '$count نه لوستل شوې خبرتیاوې',
+    '$count اطلاعیه خوانده‌نشده',
+    '$count إشعارًا غير مقروء',
+  );
+
+  static String notificationTitle(InboxNotification item) {
+    final rawEvent = item.rawEventType ?? '';
+    final expectedKey = 'guardian.$rawEvent';
+    if (item.translationKey == expectedKey) {
+      return switch (item.eventType) {
+        NotificationEventType.attendanceAbsent => _s(
+          'Attendance update',
+          'د حاضرۍ تازه خبر',
+          'به‌روزرسانی حاضری',
+          'تحديث الحضور',
+        ),
+        NotificationEventType.attendanceCorrected => _s(
+          'Attendance corrected',
+          'حاضري سمه شوه',
+          'حاضری اصلاح شد',
+          'تم تصحيح الحضور',
+        ),
+        NotificationEventType.releasedResult => _s(
+          'Results released',
+          'پایلې خپرې شوې',
+          'نتایج منتشر شد',
+          'تم نشر النتائج',
+        ),
+        NotificationEventType.promotionCommitted => _s(
+          'Promotion recorded',
+          'ارتقا ثبت شوه',
+          'ارتقا ثبت شد',
+          'تم تسجيل الترفيع',
+        ),
+        NotificationEventType.transferApproved => _s(
+          'Transfer approved',
+          'لېږد منظور شو',
+          'انتقال تأیید شد',
+          'تمت الموافقة على النقل',
+        ),
+        NotificationEventType.unknown => _safeText(item.title, notifications),
+      };
+    }
+    return _safeText(item.title, notifications);
+  }
+
+  static String notificationBody(InboxNotification item) {
+    final studentName =
+        item.translationParams['student'] ?? item.student?.name ?? '';
+    final rawEvent = item.rawEventType ?? '';
+    final expectedKey = 'guardian.$rawEvent';
+    if (item.translationKey == expectedKey && studentName.isNotEmpty) {
+      return switch (item.eventType) {
+        NotificationEventType.attendanceAbsent => _s(
+          '$studentName was recorded absent.',
+          '$studentName غیر حاضر ثبت شو.',
+          '$studentName غیرحاضر ثبت شد.',
+          'سُجّل $studentName غائبًا.',
+        ),
+        NotificationEventType.attendanceCorrected => _s(
+          'Attendance for $studentName was corrected.',
+          'د $studentName حاضري سمه شوه.',
+          'حاضری $studentName اصلاح شد.',
+          'تم تصحيح حضور $studentName.',
+        ),
+        NotificationEventType.releasedResult => _s(
+          'Released results are available for $studentName.',
+          'د $studentName خپرې شوې پایلې شته.',
+          'نتایج منتشرشده $studentName در دسترس است.',
+          'النتائج المنشورة متاحة لـ $studentName.',
+        ),
+        NotificationEventType.promotionCommitted => _s(
+          'A promotion was recorded for $studentName.',
+          'د $studentName ارتقا ثبت شوه.',
+          'ارتقای $studentName ثبت شد.',
+          'تم تسجيل ترفيع لـ $studentName.',
+        ),
+        NotificationEventType.transferApproved => _s(
+          'A transfer was approved for $studentName.',
+          'د $studentName لېږد منظور شو.',
+          'انتقال $studentName تأیید شد.',
+          'تمت الموافقة على نقل $studentName.',
+        ),
+        NotificationEventType.unknown => _safeText(item.body, notifications),
+      };
+    }
+    return _safeText(item.body, notifications);
+  }
+
+  static String _safeText(String? value, String fallback) =>
+      value == null || value.trim().isEmpty ? fallback : value.trim();
+
   static String roleLabel(String value) {
     final key = value.trim().toLowerCase().replaceAll('-', '_');
     return switch (key) {
@@ -361,6 +548,24 @@ abstract final class AppStrings {
     invalidSession,
     language,
     selectLanguage,
+    notifications,
+    notificationsSubtitle,
+    loadingNotifications,
+    notificationsUnavailable,
+    noNotificationsTitle,
+    noNotifications,
+    markAllRead,
+    loadMore,
+    notificationDetails,
+    unreadNotification,
+    readNotification,
+    notificationReadFailed,
+    notificationNoLongerAvailable,
+    notificationTargetUnavailable,
+    resultsDestinationUnavailable,
+    viewChildDetails,
+    student,
+    studentNumberLabel,
     roleLabel('guardian'),
     roleLabel('teacher'),
     ...placementLabels.values,

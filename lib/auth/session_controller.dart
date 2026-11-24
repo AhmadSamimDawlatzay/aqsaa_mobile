@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../api/api_client.dart';
 import '../models/auth_models.dart';
 import '../models/child_models.dart';
+import '../models/notification_models.dart';
 import 'session_store.dart';
 
 enum SessionPhase {
@@ -67,6 +68,45 @@ class SessionController extends ChangeNotifier {
     (credential) =>
         api.fetchAttendanceSummary(credential, id, from: from, to: to),
   );
+  Future<T> _notificationRequest<T>(
+    Future<T> Function(SessionCredential) action,
+  ) async {
+    if (phase != SessionPhase.authenticated || _credential == null) {
+      throw const ApiException(ApiFailure.forbidden);
+    }
+    final generation = _generation;
+    try {
+      final result = await action(_credential!);
+      if (!_current(generation)) {
+        throw const ApiException(ApiFailure.unauthorized);
+      }
+      return result;
+    } on ApiException catch (error) {
+      if (_current(generation) && error.failure == ApiFailure.unauthorized) {
+        invalidSessionNotice = true;
+        await _clear(++_generation);
+      }
+      rethrow;
+    }
+  }
+
+  Future<NotificationPage> fetchNotifications({
+    int page = 1,
+    int perPage = 25,
+  }) => _notificationRequest(
+    (credential) =>
+        api.fetchNotifications(credential, page: page, perPage: perPage),
+  );
+
+  Future<int> fetchUnreadNotificationCount() =>
+      _notificationRequest(api.fetchUnreadNotificationCount);
+
+  Future<DateTime> markNotificationRead(String id) => _notificationRequest(
+    (credential) => api.markNotificationRead(credential, id),
+  );
+
+  Future<void> markAllNotificationsRead() =>
+      _notificationRequest(api.markAllNotificationsRead);
   bool get busy => {
     SessionPhase.restoring,
     SessionPhase.signingIn,
