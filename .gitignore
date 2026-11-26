@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Flavor-specific Firebase app configuration is supplied outside source control.
+/android/app/src/*/google-services.json

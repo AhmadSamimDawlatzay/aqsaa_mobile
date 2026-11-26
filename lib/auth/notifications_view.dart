@@ -151,31 +151,39 @@ class NotificationsView extends StatelessWidget {
   }
 
   Future<void> _open(BuildContext context, InboxNotification item) async {
-    var selected = item;
     try {
-      selected = await controller.markRead(item);
+      final selected = await controller.markRead(item);
+      if (!context.mounted) return;
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (context) => NotificationDetailScreen(
+            item: selected,
+            session: session,
+            controller: controller,
+          ),
+        ),
+      );
     } catch (error) {
       if (!context.mounted) return;
       if (error is ApiException &&
           (error.failure == ApiFailure.forbidden || error.statusCode == 404)) {
+        await controller.removeUnavailable(item.id);
+        if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(AppStrings.notificationNoLongerAvailable)),
         );
-        await controller.refresh();
-        await controller.refreshUnreadCount();
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppStrings.notificationReadFailed)),
+        SnackBar(
+          content: Text(AppStrings.notificationCheckFailed),
+          action: SnackBarAction(
+            label: AppStrings.retry,
+            onPressed: () => _open(context, item),
+          ),
+        ),
       );
     }
-    if (!context.mounted) return;
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (context) =>
-            NotificationDetailScreen(item: selected, session: session),
-      ),
-    );
   }
 }
 
@@ -286,18 +294,40 @@ class NotificationDetailScreen extends StatefulWidget {
     super.key,
     required this.item,
     required this.session,
+    required this.controller,
   });
   final InboxNotification item;
   final SessionController session;
+  final NotificationInboxController controller;
 
   @override
   State<NotificationDetailScreen> createState() =>
       _NotificationDetailScreenState();
 }
 
-class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
+class _NotificationDetailScreenState extends State<NotificationDetailScreen>
+    with WidgetsBindingObserver {
   bool _opening = false;
   bool _targetUnavailable = false;
+  bool _checking = false;
+  Object? _checkError;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _revalidate();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -308,72 +338,116 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(AppStrings.notificationDetails)),
       body: AppPageFrame(
-        child: ListView(
-          children: [
-            AppSectionCard(
-              title: AppStrings.notificationTitle(item),
-              icon: _eventIcon(item.eventType),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    AppStrings.notificationBody(item),
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                  if (item.student != null) ...[
-                    const SizedBox(height: 18),
-                    AppInfoRow(
-                      label: AppStrings.student,
-                      value: item.student!.name,
-                      icon: Icons.person_outline,
+        child: _checking
+            ? const Center(child: CircularProgressIndicator())
+            : _checkError != null
+            ? Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      AppStrings.notificationCheckFailed,
+                      textAlign: TextAlign.center,
                     ),
-                    AppInfoRow(
-                      label: AppStrings.studentNumberLabel,
-                      value: item.student!.number,
-                      icon: Icons.badge_outlined,
-                      valueTextDirection: TextDirection.ltr,
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: _revalidate,
+                      child: Text(AppStrings.retry),
                     ),
                   ],
-                  const SizedBox(height: 14),
-                  Text(
-                    _formatDateTime(context, item.createdAt),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppPalette.secondaryText,
+                ),
+              )
+            : _targetUnavailable
+            ? Center(
+                child: Text(
+                  AppStrings.notificationNoLongerAvailable,
+                  textAlign: TextAlign.center,
+                ),
+              )
+            : ListView(
+                children: [
+                  AppSectionCard(
+                    title: AppStrings.notificationTitle(item),
+                    icon: _eventIcon(item.eventType),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          AppStrings.notificationBody(item),
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
+                        if (item.student != null) ...[
+                          const SizedBox(height: 18),
+                          AppInfoRow(
+                            label: AppStrings.student,
+                            value: item.student!.name,
+                            icon: Icons.person_outline,
+                          ),
+                          AppInfoRow(
+                            label: AppStrings.studentNumberLabel,
+                            value: item.student!.number,
+                            icon: Icons.badge_outlined,
+                            valueTextDirection: TextDirection.ltr,
+                          ),
+                        ],
+                        const SizedBox(height: 14),
+                        Text(
+                          _formatDateTime(context, item.createdAt),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: AppPalette.secondaryText),
+                        ),
+                      ],
                     ),
                   ),
+                  if (hasAction) ...[
+                    const SizedBox(height: AppSpacing.section),
+                    FilledButton.icon(
+                      onPressed: _opening ? null : _openTarget,
+                      icon: _opening
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.open_in_new),
+                      label: Text(
+                        item.destination == NotificationDestination.attendance
+                            ? AppStrings.viewAttendance
+                            : AppStrings.viewChildDetails,
+                      ),
+                    ),
+                  ] else if (item.eventType ==
+                      NotificationEventType.releasedResult)
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.section),
+                      child: Text(AppStrings.resultsDestinationUnavailable),
+                    ),
                 ],
               ),
-            ),
-            if (hasAction) ...[
-              const SizedBox(height: AppSpacing.section),
-              FilledButton.icon(
-                onPressed: _opening ? null : _openTarget,
-                icon: _opening
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.open_in_new),
-                label: Text(
-                  item.destination == NotificationDestination.attendance
-                      ? AppStrings.viewAttendance
-                      : AppStrings.viewChildDetails,
-                ),
-              ),
-            ] else if (item.eventType == NotificationEventType.releasedResult)
-              Padding(
-                padding: const EdgeInsets.only(top: AppSpacing.section),
-                child: Text(AppStrings.resultsDestinationUnavailable),
-              ),
-            if (_targetUnavailable)
-              Padding(
-                padding: const EdgeInsets.only(top: AppSpacing.section),
-                child: Text(AppStrings.notificationTargetUnavailable),
-              ),
-          ],
-        ),
       ),
     );
+  }
+
+  Future<void> _revalidate() async {
+    if (_checking || _targetUnavailable) return;
+    setState(() {
+      _checking = true;
+      _checkError = null;
+    });
+    try {
+      await widget.controller.markRead(widget.item);
+    } catch (error) {
+      if (!mounted) return;
+      if (error is ApiException &&
+          (error.failure == ApiFailure.forbidden || error.statusCode == 404)) {
+        await widget.controller.removeUnavailable(widget.item.id);
+        if (!mounted) return;
+        setState(() => _targetUnavailable = true);
+      } else {
+        setState(() => _checkError = error);
+      }
+    } finally {
+      if (mounted) setState(() => _checking = false);
+    }
   }
 
   Future<void> _openTarget() async {

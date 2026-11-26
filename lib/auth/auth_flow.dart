@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import '../api/api_client.dart';
 import '../l10n/app_strings.dart';
 import '../models/bootstrap_response.dart';
@@ -10,6 +12,8 @@ import 'session_store.dart';
 import 'children_view.dart';
 import 'notification_inbox_controller.dart';
 import 'notifications_view.dart';
+import '../push/push_controller.dart';
+import '../push/push_messaging.dart';
 
 class AuthFlow extends StatefulWidget {
   const AuthFlow({
@@ -19,12 +23,14 @@ class AuthFlow extends StatefulWidget {
     required this.institution,
     required this.branding,
     required this.onRetryBootstrap,
+    this.pushMessaging,
   });
   final ApiClient api;
   final SessionStore store;
   final Institution? institution;
   final Widget branding;
   final VoidCallback onRetryBootstrap;
+  final PushMessaging? pushMessaging;
   @override
   State<AuthFlow> createState() => _AuthFlowState();
 }
@@ -52,6 +58,7 @@ class _AuthFlowState extends State<AuthFlow> {
         return _AuthenticatedLayout(
           session: session,
           institution: widget.institution,
+          pushMessaging: widget.pushMessaging,
         );
       }
       if (session.busy && session.phase != SessionPhase.signingIn) {
@@ -199,9 +206,11 @@ class _AuthenticatedLayout extends StatefulWidget {
   const _AuthenticatedLayout({
     required this.session,
     required this.institution,
+    this.pushMessaging,
   });
   final SessionController session;
   final Institution? institution;
+  final PushMessaging? pushMessaging;
 
   @override
   State<_AuthenticatedLayout> createState() => _AuthenticatedLayoutState();
@@ -212,6 +221,7 @@ class _AuthenticatedLayoutState extends State<_AuthenticatedLayout>
   int _destination = 0;
   late final NotificationInboxController notifications;
   DateTime? _lastResumeRefresh;
+  PushController? push;
 
   @override
   void initState() {
@@ -221,6 +231,59 @@ class _AuthenticatedLayoutState extends State<_AuthenticatedLayout>
     if (widget.session.capabilities!.canViewChildren) {
       notifications.initialize();
     }
+    if (widget.pushMessaging != null) {
+      push = PushController(
+        messaging: widget.pushMessaging!,
+        session: widget.session,
+        onForegroundMessage: _onForegroundPush,
+        onOpenInbox: _openInboxFromPush,
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) => _offerPush());
+    }
+  }
+
+  Future<void> _offerPush() async {
+    if (!mounted || push == null) return;
+    final permission = await push!.permissionStatus();
+    if (!mounted) return;
+    if (permission != PushPermission.notDetermined) {
+      await push!.start(requestPermission: false);
+      return;
+    }
+    final enable = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(AppStrings.pushPermissionTitle),
+        content: Text(AppStrings.pushPermissionBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(AppStrings.notNow),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(AppStrings.enableNotifications),
+          ),
+        ],
+      ),
+    );
+    if (mounted) await push!.start(requestPermission: enable == true);
+  }
+
+  void _onForegroundPush() {
+    notifications.refresh();
+    notifications.refreshUnreadCount();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(AppStrings.newNotification)));
+  }
+
+  void _openInboxFromPush() {
+    if (!mounted || !widget.session.capabilities!.canViewChildren) return;
+    setState(() => _destination = 1);
+    notifications.refresh();
+    notifications.refreshUnreadCount();
   }
 
   @override
@@ -237,12 +300,14 @@ class _AuthenticatedLayoutState extends State<_AuthenticatedLayout>
     _lastResumeRefresh = now;
     notifications.refresh();
     notifications.refreshUnreadCount();
+    push?.resume();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     notifications.dispose();
+    push?.dispose();
     super.dispose();
   }
 
@@ -295,12 +360,14 @@ class _AuthenticatedLayoutState extends State<_AuthenticatedLayout>
                 AccountView(
                   session: widget.session,
                   institution: widget.institution,
+                  push: push,
                 ),
               ],
             )
           : AccountView(
               session: widget.session,
               institution: widget.institution,
+              push: push,
             ),
       bottomNavigationBar: canViewChildren
           ? NavigationBar(
@@ -350,9 +417,11 @@ class AccountView extends StatelessWidget {
     super.key,
     required this.session,
     required this.institution,
+    this.push,
   });
   final SessionController session;
   final Institution? institution;
+  final PushController? push;
 
   @override
   Widget build(BuildContext context) => AppPageFrame(
@@ -420,6 +489,12 @@ class AccountView extends StatelessWidget {
           Text(AppStrings.noCapabilities),
         ],
         const SizedBox(height: AppSpacing.section),
+        if (push != null)
+          ListenableBuilder(
+            listenable: push!,
+            builder: (context, _) => _PushStatusCard(controller: push!),
+          ),
+        if (push != null) const SizedBox(height: AppSpacing.section),
         OutlinedButton.icon(
           onPressed: session.logout,
           icon: const Icon(Icons.logout),
@@ -428,6 +503,56 @@ class AccountView extends StatelessWidget {
       ],
     ),
   );
+}
+
+class _PushStatusCard extends StatelessWidget {
+  const _PushStatusCard({required this.controller});
+  final PushController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final message = switch (controller.state) {
+      PushState.registered => AppStrings.pushReady,
+      PushState.denied => AppStrings.pushDenied,
+      PushState.conflict => AppStrings.pushConflict,
+      PushState.failed => AppStrings.pushRegistrationFailed,
+      PushState.registering => AppStrings.pushRegistering,
+      PushState.idle => AppStrings.pushNotEnabled,
+    };
+    return AppSectionCard(
+      title: AppStrings.pushNotifications,
+      icon: Icons.notifications_active_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(message),
+          if (controller.state == PushState.failed) ...[
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: controller.retry,
+              child: Text(AppStrings.retry),
+            ),
+          ],
+          if (kDebugMode && controller.state == PushState.registered) ...[
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: () async {
+                final token = await controller.debugTokenForCopy();
+                if (token == null || !context.mounted) return;
+                await Clipboard.setData(ClipboardData(text: token));
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(AppStrings.debugTokenCopied)),
+                );
+              },
+              icon: const Icon(Icons.copy_outlined),
+              label: Text(AppStrings.copyDebugToken),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class LoginForm extends StatefulWidget {

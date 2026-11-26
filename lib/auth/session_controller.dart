@@ -32,6 +32,9 @@ class SessionController extends ChangeNotifier {
   bool _disposed = false;
   int _generation = 0;
   bool get hasSession => _credential != null;
+  Object? get sessionIdentity => phase == SessionPhase.authenticated
+      ? '${profile?.id}:$_generation:${api.sessionScope}'
+      : null;
   Future<T> _childRequest<T>(
     Future<T> Function(SessionCredential) action,
   ) async {
@@ -107,6 +110,14 @@ class SessionController extends ChangeNotifier {
 
   Future<void> markAllNotificationsRead() =>
       _notificationRequest(api.markAllNotificationsRead);
+
+  Future<void> registerPushToken(String token) => _notificationRequest(
+    (credential) async => api.registerDevice(
+      credential,
+      deviceId: await store.deviceId(),
+      pushToken: token,
+    ),
+  );
   bool get busy => {
     SessionPhase.restoring,
     SessionPhase.signingIn,

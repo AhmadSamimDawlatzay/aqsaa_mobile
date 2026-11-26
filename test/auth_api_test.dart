@@ -9,6 +9,59 @@ import 'support/auth_fixtures.dart';
 
 void main() {
   test(
+    'device registration uses the authenticated installation contract',
+    () async {
+      final client = ApiClient(
+        baseUrl: testBase,
+        client: MockClient((request) async {
+          expect(request.method, 'PUT');
+          expect(request.url.path, '/api/v1/devices/installation-test');
+          expect(
+            request.headers['Authorization'],
+            'Bearer synthetic-test-token',
+          );
+          expect(jsonDecode(request.body), {
+            'platform': 'android',
+            'push_token': 'synthetic-push-token',
+          });
+          return response({'data': {}});
+        }),
+      );
+      addTearDown(client.close);
+      await client.registerDevice(
+        credential(),
+        deviceId: 'installation-test',
+        pushToken: 'synthetic-push-token',
+      );
+    },
+  );
+
+  test(
+    'device registration exposes ownership conflicts without transfer',
+    () async {
+      final client = ApiClient(
+        baseUrl: testBase,
+        client: MockClient((_) async => response({'message': 'Conflict'}, 409)),
+      );
+      addTearDown(client.close);
+      expect(
+        () => client.registerDevice(
+          credential(),
+          deviceId: 'installation-test',
+          pushToken: 'synthetic-push-token',
+        ),
+        throwsA(
+          isA<ApiException>().having(
+            (error) => error.failure,
+            'failure',
+            ApiFailure.conflict,
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
     'login posts exact contract, no bearer, and parses 201 token expiry',
     () async {
       final api = ApiClient(

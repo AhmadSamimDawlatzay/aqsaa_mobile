@@ -21,18 +21,20 @@ Map<String, Object?> notice(
   String version = 'v1',
   String? route = 'guardian.student',
   String? tab,
+  int studentId = 9,
+  String studentName = 'Student Name',
 }) => {
   'id': id,
   'event_type': event,
-  'student': {'id': 9, 'student_number': 'ST-009', 'name': 'Student Name'},
+  'student': {'id': studentId, 'student_number': 'ST-009', 'name': studentName},
   'translation_key': 'guardian.$event',
-  'translation_params': {'student': 'Student Name'},
+  'translation_params': {'student': studentName},
   'deep_link': route == null
       ? null
       : {
           'version': version,
           'route': route,
-          'student_id': 9,
+          'student_id': studentId,
           'tab':
               tab ??
               (event.startsWith('attendance_')
@@ -213,6 +215,83 @@ void main() {
   );
 
   test(
+    'refresh removes revoked-child notices loaded from later pages',
+    () async {
+      var revoked = false;
+      final api = ApiClient(
+        baseUrl: testBase,
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/me')) return response(profileJson());
+          if (request.url.path.endsWith('/capabilities')) {
+            return response(capabilitiesJson());
+          }
+          if (request.url.path.endsWith('unread-count')) {
+            return response({
+              'data': {'count': revoked ? 1 : 3},
+            });
+          }
+          if (request.url.path.endsWith('/notifications')) {
+            final requestedPage = int.parse(
+              request.url.queryParameters['page'] ?? '1',
+            );
+            if (revoked) {
+              return response(
+                page([
+                  notice('still-visible', 'promotion_committed', studentId: 9),
+                ]),
+              );
+            }
+            if (requestedPage == 2) {
+              return response(
+                page(
+                  [
+                    notice(
+                      'revoked-page-two',
+                      'attendance_absent',
+                      studentId: 27,
+                      studentName: 'Revoked Child',
+                    ),
+                    notice(
+                      'visible-page-two',
+                      'attendance_corrected',
+                      studentId: 9,
+                    ),
+                  ],
+                  current: 2,
+                  last: 2,
+                ),
+              );
+            }
+            return response(
+              page([
+                notice('still-visible', 'promotion_committed', studentId: 9),
+              ], last: 2),
+            );
+          }
+          throw StateError('Unexpected request');
+        }),
+      );
+      addTearDown(api.close);
+      final store = SessionStore(MemorySecureStore());
+      await store.save(credential());
+      final session = SessionController(api: api, store: store);
+      await session.restore();
+      final inbox = NotificationInboxController(session: session);
+      addTearDown(inbox.dispose);
+      addTearDown(session.dispose);
+      await inbox.initialize();
+      await inbox.loadMore();
+      expect(inbox.items.map((item) => item.id), contains('revoked-page-two'));
+
+      revoked = true;
+      await inbox.refresh();
+
+      expect(inbox.items.map((item) => item.id), ['still-visible']);
+      expect(inbox.items.any((item) => item.student?.id == 27), isFalse);
+    },
+  );
+
+  test(
     'failed read leaves item unread; successful read synchronizes count',
     () async {
       var failRead = true;
@@ -261,6 +340,146 @@ void main() {
       await inbox.markRead(inbox.items.single);
       expect(inbox.items.single.isRead, isTrue);
       expect(inbox.unreadCount, 0);
+    },
+  );
+
+  testWidgets('opening waits for visibility and removes a denied cached item', (
+    tester,
+  ) async {
+    AppStrings.setLanguage(AppLanguage.english);
+    var readMode = 'network';
+    final api = ApiClient(
+      baseUrl: testBase,
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/me')) return response(profileJson());
+        if (request.url.path.endsWith('/capabilities')) {
+          return response(capabilitiesJson());
+        }
+        if (request.url.path.endsWith('unread-count')) {
+          return response({
+            'data': {'count': readMode == 'denied' ? 0 : 1},
+          });
+        }
+        if (request.url.path.endsWith('/read')) {
+          if (readMode == 'network') {
+            throw http.ClientException('offline');
+          }
+          return response({'message': 'Not found'}, 404);
+        }
+        if (request.url.path.endsWith('/notifications')) {
+          return response(page([notice('one', 'attendance_absent')]));
+        }
+        throw StateError('Unexpected request');
+      }),
+    );
+    addTearDown(api.close);
+    final store = SessionStore(MemorySecureStore());
+    await store.save(credential());
+    final session = SessionController(api: api, store: store);
+    await session.restore();
+    final inbox = NotificationInboxController(session: session);
+    addTearDown(inbox.dispose);
+    addTearDown(session.dispose);
+    await inbox.initialize();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: NotificationsView(controller: inbox, session: session),
+        ),
+      ),
+    );
+
+    final title = AppStrings.notificationTitle(inbox.items.single);
+    await tester.tap(find.text(title));
+    await tester.pumpAndSettle();
+    expect(find.byType(NotificationDetailScreen), findsNothing);
+    expect(find.text(AppStrings.notificationCheckFailed), findsOneWidget);
+
+    readMode = 'denied';
+    await tester.tap(find.text(AppStrings.retry));
+    await tester.pumpAndSettle();
+    expect(find.byType(NotificationDetailScreen), findsNothing);
+    expect(inbox.items, isEmpty);
+    expect(inbox.unreadCount, 0);
+    expect(session.phase, SessionPhase.authenticated);
+  });
+
+  testWidgets(
+    'an open detail hides cached content while resume revalidation fails',
+    (tester) async {
+      AppStrings.setLanguage(AppLanguage.english);
+      var readMode = 'success';
+      final api = ApiClient(
+        baseUrl: testBase,
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/me')) return response(profileJson());
+          if (request.url.path.endsWith('/capabilities')) {
+            return response(capabilitiesJson());
+          }
+          if (request.url.path.endsWith('unread-count')) {
+            return response({
+              'data': {'count': readMode == 'denied' ? 0 : 1},
+            });
+          }
+          if (request.url.path.endsWith('/read')) {
+            if (readMode == 'network') {
+              throw http.ClientException('offline');
+            }
+            if (readMode == 'denied') {
+              return response({'message': 'Not found'}, 404);
+            }
+            return response({
+              'data': {'id': 'one', 'read_at': '2026-11-23T08:00:00.000000Z'},
+            });
+          }
+          if (request.url.path.endsWith('/notifications')) {
+            return response(page([notice('one', 'attendance_absent')]));
+          }
+          throw StateError('Unexpected request');
+        }),
+      );
+      addTearDown(api.close);
+      final store = SessionStore(MemorySecureStore());
+      await store.save(credential());
+      final session = SessionController(api: api, store: store);
+      await session.restore();
+      final inbox = NotificationInboxController(session: session);
+      addTearDown(inbox.dispose);
+      addTearDown(session.dispose);
+      await inbox.initialize();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: NotificationsView(controller: inbox, session: session),
+          ),
+        ),
+      );
+
+      await tester.tap(
+        find.text(AppStrings.notificationTitle(inbox.items.single)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(NotificationDetailScreen), findsOneWidget);
+      expect(find.text('Student Name'), findsWidgets);
+
+      readMode = 'network';
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(find.text('Student Name'), findsNothing);
+      expect(find.text(AppStrings.notificationCheckFailed), findsOneWidget);
+
+      readMode = 'denied';
+      await tester.tap(find.text(AppStrings.retry));
+      await tester.pumpAndSettle();
+      expect(find.text('Student Name'), findsNothing);
+      expect(
+        find.text(AppStrings.notificationNoLongerAvailable),
+        findsOneWidget,
+      );
+      expect(inbox.items, isEmpty);
+      expect(inbox.unreadCount, 0);
+      expect(session.phase, SessionPhase.authenticated);
     },
   );
 

@@ -5,6 +5,7 @@ import '../models/bootstrap_response.dart';
 import '../models/auth_models.dart';
 import '../models/child_models.dart';
 import '../models/notification_models.dart';
+import '../config/installation_config.dart';
 
 enum ApiFailure {
   configuration,
@@ -17,6 +18,7 @@ enum ApiFailure {
   invalidCredentials,
   unauthorized,
   forbidden,
+  conflict,
   rateLimited,
   redirect,
 }
@@ -36,13 +38,11 @@ class ApiException implements Exception {
 
 class ApiClient {
   ApiClient({
-    this._baseUrl = const String.fromEnvironment(
-      'API_BASE_URL',
-      defaultValue: 'https://demo.aqsaa.app/api/v1',
-    ),
+    String? baseUrl,
     http.Client? client,
     this.timeout = const Duration(seconds: 15),
-  }) : _client = client ?? http.Client();
+  }) : _baseUrl = baseUrl ?? InstallationConfig.current.apiBaseUrl,
+       _client = client ?? http.Client();
   final String _baseUrl;
   final http.Client _client;
   final Duration timeout;
@@ -114,6 +114,19 @@ class ApiClient {
       'auth/logout',
       session: session,
       expectedStatus: 204,
+    );
+  }
+
+  Future<void> registerDevice(
+    SessionCredential session, {
+    required String deviceId,
+    required String pushToken,
+  }) async {
+    await _request(
+      'PUT',
+      'devices/${Uri.encodeComponent(deviceId)}',
+      session: session,
+      body: {'platform': 'android', 'push_token': pushToken},
     );
   }
 
@@ -245,6 +258,7 @@ class ApiClient {
         var failure = switch (status) {
           401 => ApiFailure.unauthorized,
           403 => ApiFailure.forbidden,
+          409 => ApiFailure.conflict,
           429 => ApiFailure.rateLimited,
           >= 300 && < 400 => ApiFailure.redirect,
           _ => ApiFailure.http,

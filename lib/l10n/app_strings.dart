@@ -347,6 +347,12 @@ abstract final class AppStrings {
     'اطلاعیه باز شد، اما وضعیت خواندن آن به‌روز نشد.',
     'فُتح الإشعار، لكن تعذر تحديث حالة القراءة.',
   );
+  static String get notificationCheckFailed => _s(
+    'Could not verify that this notification is still available. Check your connection and retry.',
+    'د دې خبرتیا شتون ونه تایید شو. خپله اړیکه وګورئ او بیا هڅه وکړئ.',
+    'موجود بودن این اطلاعیه تأیید نشد. اتصال خود را بررسی کرده و دوباره تلاش کنید.',
+    'تعذر التحقق من أن هذا الإشعار ما زال متاحًا. تحقق من اتصالك وحاول مجددًا.',
+  );
   static String get notificationNoLongerAvailable => _s(
     'This notification is no longer available.',
     'دا خبرتیا نور شتون نه لري.',
@@ -560,9 +566,24 @@ abstract final class AppStrings {
     unreadNotification,
     readNotification,
     notificationReadFailed,
+    notificationCheckFailed,
     notificationNoLongerAvailable,
     notificationTargetUnavailable,
     resultsDestinationUnavailable,
+    pushNotifications,
+    pushPermissionTitle,
+    pushPermissionBody,
+    enableNotifications,
+    notNow,
+    newNotification,
+    pushReady,
+    pushDenied,
+    pushConflict,
+    pushRegistrationFailed,
+    pushRegistering,
+    pushNotEnabled,
+    copyDebugToken,
+    debugTokenCopied,
     viewChildDetails,
     student,
     studentNumberLabel,
@@ -657,6 +678,86 @@ abstract final class AppStrings {
         'التخزين الآمن غير متاح. افتح جهازك وحاول مجددًا.',
       );
     }
+    return _apiError(error);
+  }
+
+  static String get pushNotifications => _s(
+    'Push notifications',
+    'فوري خبرتیاوې',
+    'اطلاعیه‌های فوری',
+    'الإشعارات الفورية',
+  );
+  static String get pushPermissionTitle =>
+      _s('Stay informed', 'خبر پاتې شئ', 'باخبر بمانید', 'ابقَ على اطلاع');
+  static String get pushPermissionBody => _s(
+    'Allow Aqsaa to notify you when a new secure inbox item is available. You can continue using the app if you decline.',
+    'اقصی ته اجازه ورکړئ چې د خوندي صندوق د نوې خبرتیا په وخت کې مو خبر کړي. که اجازه ور نه کړئ، بیا هم اپ کارولی شئ.',
+    'به اقصی اجازه دهید هنگام موجود شدن یک اطلاعیه جدید در صندوق امن شما را آگاه کند. در صورت رد نیز می‌توانید از برنامه استفاده کنید.',
+    'اسمح لأقصى بإبلاغك عند توفر إشعار جديد في صندوق الوارد الآمن. يمكنك متابعة استخدام التطبيق إذا رفضت.',
+  );
+  static String get enableNotifications => _s(
+    'Enable notifications',
+    'خبرتیاوې فعالې کړئ',
+    'فعال‌سازی اطلاعیه‌ها',
+    'تفعيل الإشعارات',
+  );
+  static String get notNow => _s('Not now', 'اوس نه', 'فعلاً نه', 'ليس الآن');
+  static String get newNotification => _s(
+    'You have a new notification in Aqsaa.',
+    'تاسو په اقصی کې نوې خبرتیا لرئ.',
+    'شما یک اطلاعیه جدید در اقصی دارید.',
+    'لديك إشعار جديد في أقصى.',
+  );
+  static String get pushReady => _s(
+    'Notifications are enabled for this account and installation.',
+    'د دې حساب او نصب لپاره خبرتیاوې فعالې دي.',
+    'اطلاعیه‌ها برای این حساب و نصب فعال است.',
+    'الإشعارات مفعلة لهذا الحساب وهذا التثبيت.',
+  );
+  static String get pushDenied => _s(
+    'Notification permission is off. Login and the inbox still work normally.',
+    'د خبرتیا اجازه بنده ده. ننوتل او صندوق لا هم عادي کار کوي.',
+    'اجازه اطلاعیه خاموش است. ورود و صندوق اطلاعیه همچنان عادی کار می‌کند.',
+    'إذن الإشعارات متوقف. يظل تسجيل الدخول وصندوق الوارد يعملان بصورة طبيعية.',
+  );
+  static String get pushConflict => _s(
+    'This device registration belongs to another account. Sign out that account on this installation first, or ask an administrator to verify the stale registration.',
+    'د دې وسیلې ثبت د بل حساب دی. لومړی هغه حساب له همدې نصب څخه وباسئ، یا له مدیر څخه د زوړ ثبت د کتلو غوښتنه وکړئ.',
+    'ثبت این دستگاه متعلق به حساب دیگری است. نخست آن حساب را در همین نصب خارج کنید، یا از مدیر بخواهید ثبت قبلی را بررسی کند.',
+    'تسجيل هذا الجهاز مرتبط بحساب آخر. سجّل خروج ذلك الحساب من هذا التثبيت أولاً، أو اطلب من المسؤول التحقق من التسجيل القديم.',
+  );
+  static String get pushRegistrationFailed => _s(
+    'Notification registration could not be completed. Inbox access is unaffected.',
+    'د خبرتیا ثبت بشپړ نه شو. صندوق ته لاسرسی اغېزمن نه دی.',
+    'ثبت اطلاعیه تکمیل نشد. دسترسی به صندوق اطلاعیه تحت تأثیر نیست.',
+    'تعذر إكمال تسجيل الإشعارات. الوصول إلى صندوق الوارد غير متأثر.',
+  );
+  static String get pushRegistering => _s(
+    'Registering notifications…',
+    'خبرتیاوې ثبتېږي…',
+    'در حال ثبت اطلاعیه‌ها…',
+    'جارٍ تسجيل الإشعارات…',
+  );
+  static String get pushNotEnabled => _s(
+    'Notifications have not been enabled.',
+    'خبرتیاوې لا نه دي فعالې شوې.',
+    'اطلاعیه‌ها هنوز فعال نشده است.',
+    'لم يتم تفعيل الإشعارات بعد.',
+  );
+  static String get copyDebugToken => _s(
+    'Copy test token (debug only)',
+    'د ازموینې ټوکن کاپي کړئ (یوازې ډیبګ)',
+    'کپی توکن آزمایشی (فقط دیباگ)',
+    'نسخ رمز الاختبار (التصحيح فقط)',
+  );
+  static String get debugTokenCopied => _s(
+    'Test token copied. Keep it private.',
+    'د ازموینې ټوکن کاپي شو. شخصي یې وساتئ.',
+    'توکن آزمایشی کپی شد. آن را محرمانه نگه دارید.',
+    'تم نسخ رمز الاختبار. احتفظ به سريًا.',
+  );
+
+  static String _apiError(Object? error) {
     if (error is! ApiException) {
       return _s(
         'Something went wrong. Please try again.',
@@ -685,6 +786,7 @@ abstract final class AppStrings {
         'این حساب اجازه دسترسی به این بخش را ندارد. نشست حفظ شد.',
         'هذا الحساب غير مسموح له بالوصول. حُفظت الجلسة.',
       ),
+      ApiFailure.conflict => pushConflict,
       ApiFailure.rateLimited => _s(
         'Too many attempts. Wait a minute, then try again.',
         'ډېرې هڅې وشوې. یوه دقیقه وروسته بیا هڅه وکړئ.',
@@ -697,7 +799,7 @@ abstract final class AppStrings {
         'API به نشانی دیگری فرستاد. نشانی API را بررسی کنید.',
         'أعادت API توجيه الطلب. تحقق من عنوان API.',
       ),
-      ApiFailure.configuration => 'API_BASE_URL: HTTPS … /api/v1',
+      ApiFailure.configuration => 'Installation API: HTTPS … /api/v1',
       ApiFailure.network => _s(
         'Check your internet connection and try again.',
         'انټرنېټ وګورئ او بیا هڅه وکړئ.',

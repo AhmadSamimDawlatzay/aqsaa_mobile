@@ -1,6 +1,6 @@
 ﻿# Aqsaa Mobile
 
-Implemented: public institution bootstrap, email/password login, secure session restoration, guardian linked-child list, placement details, attendance history and summary, and logout. Business records remain read-only; no refresh tokens, Firebase, or push registration are implemented.
+Implemented: public institution bootstrap, email/password login, secure session restoration, guardian linked-child list, placement details, attendance history and summary, notification inbox, Android Firebase Messaging registration, and logout. Business records remain read-only; no refresh tokens or Firebase authentication are implemented.
 
 ## Languages
 
@@ -40,8 +40,27 @@ Regression coverage: `test/children_test.dart`; run the empty/error, pagination,
 ```powershell
 cd C:\Projects\aqsaa_mobile
 flutter pub get
-flutter run -d emulator-5554 --dart-define=API_BASE_URL=https://demo.aqsaa.app/api/v1
+flutter run -d emulator-5554 --flavor demo
 ```
+
+The `demo` Android flavor is one fixed installation identity:
+
+| Setting | Demo value |
+| --- | --- |
+| Android application ID | `app.aqsaa.demo` |
+| Installed name | `Aqsaa Demo` |
+| API base URL | `https://demo.aqsaa.app/api/v1` |
+| Firebase project/configuration | `aqsaademo` / `android/app/src/demo/google-services.json` |
+
+The API base **includes `/api/v1`**. `lib/config/installation_config.dart` derives this identity from Flutter's native `appFlavor`; release builds require a known flavor. The previous unrestricted `API_BASE_URL` define is no longer used. For local development only, a debug build may use a loopback endpoint ending in `/api/v1`:
+
+```powershell
+flutter run -d emulator-5554 --flavor demo --dart-define=DEBUG_API_BASE_URL=http://10.0.2.2:8000/api/v1
+```
+
+This override rejects non-local hosts and is rejected in release mode, preventing a demo release from being paired with another installation's API. Institution name/logo still come from the selected server's bootstrap response; optional bundled branding belongs to the same installation configuration.
+
+The project previously installed as `app.aqsaa.aqsaa_mobile`. The demo flavor installs separately as `app.aqsaa.demo`; Android does not transfer the old app's secure session or device identifier. The old app is not uninstalled or cleared automatically.
 
 ## Notification inbox
 
@@ -71,9 +90,72 @@ Manual verification:
 5. Use Account to switch all four languages and confirm the inbox/detail remain open, with RTL for Pashto, Dari, and Arabic.
 6. Log out and sign in as another account; confirm no previous items or count remain.
 
-Firebase push delivery and an authorized results screen are separate future milestones. The inbox does not generate events or register push delivery.
+Automatic Laravel-to-FCM delivery and an authorized results screen remain separate milestones. The mobile app now registers Android messaging tokens, but it does not generate business events.
 
-`API_BASE_URL` **includes `/api/v1`**. The client appends paths such as `bootstrap` and `auth/login` exactly once. A trailing slash is accepted. HTTPS is required; certificate validation remains enabled. This demo URL is the default. Restart/rebuild after changing a dart-define.
+## Android Firebase Messaging
+
+The demo flavor initializes the native Firebase project `aqsaademo` through `android/app/src/demo/google-services.json`. Gradle fails if that file is absent or does not contain `app.aqsaa.demo` and `aqsaademo`; Dart verifies the initialized project ID against the installation configuration. Firebase Authentication is not used.
+
+After Laravel session validation, the app explains the benefit and optionally requests Android notification permission. Denial does not block login, children, attendance, or the inbox. If allowed, it obtains the FCM token and calls authenticated `PUT /devices/{deviceId}` with `platform: android` and `push_token`. Token rotations re-register through the same session/device boundary. Recoverable failures use bounded 1/2/4-second retries; HTTP 409 is not retried or transferred. The user must first log out the prior account on that installation, or an authorized operator must verify/remove a stale registration.
+
+Foreground messages show one generic in-app banner and refresh the inbox plus authoritative unread count. Background notification messages use Android channel `aqsaa_updates`; Android displays them without a second local alert. Background code initializes Firebase only and never navigates or accesses UI/session state. Taps and cold-start messages wait for the authenticated layout, then open and refresh the inbox. Push data does not grant access and does not mark anything read.
+
+The current API has no safe `GET /notifications/{id}` lookup. It only has list, unread count, and read mutations. Consequently, notification IDs from push cannot directly resolve older notices outside the loaded page; taps open the authoritative inbox. The smallest backend addition for precise navigation is a current-user/guardian-visibility-filtered `GET /notifications/{id}` returning the existing notification Resource and 404 after link revocation.
+
+### Push payload contract for Laravel
+
+Use a generic visible notification and minimal data; do not include student names, marks, attendance details, or arbitrary URLs:
+
+```json
+{
+  "notification": {
+    "title": "Aqsaa",
+    "body": "You have a new notification in Aqsaa."
+  },
+  "data": {
+    "version": "aqsaa.push.v1",
+    "notification_id": "<database-notification-id>",
+    "installation": "demo"
+  },
+  "android": {
+    "notification": {
+      "channel_id": "aqsaa_updates"
+    }
+  }
+}
+```
+
+Send only to the FCM token held by the intended `mobile_devices` row. `notification_id` identifies the existing database notification; `installation: demo` is the stable installation/flavor boundary. Unknown versions, malformed data, and another installation value never navigate to protected content. A Firebase Console test notification normally has no application notification ID and therefore safely opens the inbox.
+
+### Manual FCM test
+
+1. Run `flutter run --flavor demo` on an Android device/emulator with Google Play services, sign in with the designated test account, and enable notifications.
+2. In this debug build only, open Account → Push notifications → **Copy test token (debug only)**. The token is copied to the clipboard and is never logged. Keep it private.
+3. In Firebase Console, open project `aqsaademo` → Messaging, compose one test notification with the generic title/body above, choose **Send test message**, and paste the token.
+4. Foreground: keep Aqsaa visible. Expect one localized in-app banner and an inbox/unread refresh.
+5. Background: place Aqsaa in the background and send another test. Expect one Android notification on `aqsaa_updates`; tapping it opens and refreshes the inbox after session validation.
+6. Cold start: terminate the app normally (do not Android-force-stop it), send another test, and tap it. Expect startup/session validation followed by the inbox. A force-stopped Android app must be opened manually before FCM resumes.
+
+Console test messages prove Firebase transport only. Laravel-to-FCM sending is not implemented yet, and a console message without `notification_id` cannot prove database notification delivery.
+
+### Notification verification status
+
+Authenticated live verification on 2026-11-26 used the designated demo guardian without recording its password or token. Login returned 201, GET notifications returned 200 with a valid empty Laravel page (current page 1, last page 1), unread count returned 200 with zero, and logout returned 204. The live inbox contained no item, so opening an item, marking it read, count reduction, and related-child navigation could not be verified live without creating business data.
+
+Populated-state verification is fixture-based, not live delivery proof. Automated tests cover all five documented guardian event types, unknown descriptors, read success/failure, authoritative unread totals, two-page deduplication, revocation after later pages were loaded, stale refresh races, logout/account isolation, and already-open detail revalidation. Emulator fixtures render inbox and detail screens in Pashto, Dari, Arabic, and English.
+
+To create a real absence notification manually in the demo environment:
+
+1. Sign in to the demo admin panel with an authorized demo teacher or super-admin account.
+2. Open **Attendance → Attendance Sessions** and create a new manual session for an unused date.
+3. Select the current demo branch, academic year, program, level, class, and section containing DEMO-ST-001 (Amina Safi), the child linked to the demo guardian.
+4. Save the session, choose **Take Attendance**, and set that student to **Absent**. Set the other students accurately.
+5. Choose **Complete Attendance**. Merely saving a draft does not create a notification.
+6. Sign in to the mobile app as guardian@aqsaa.app, open Notifications, and pull to refresh. Opening the new notice should mark it read and allow navigation to the authorized attendance screen.
+
+These steps change demo attendance records and therefore must be performed intentionally by an authorized operator; the Flutter verification process does not run them automatically.
+
+The configured API base includes `/api/v1`; the client appends paths such as `bootstrap` and `auth/login` exactly once. HTTPS and normal certificate validation remain enabled for installation endpoints.
 
 ## Verified Laravel contract
 
@@ -113,6 +195,23 @@ A random 32-byte (64 hex characters) installation identifier is generated using 
 
 Tokens are keyed by the normalized full HTTPS API base (including origin, port, and installation path) and also carry that scope inside the record. A token from another base is never selected or sent. Changing the configured server leaves the old server's record isolated; return to that configuration to log out there. All API requests disable redirects, and bearer tokens are attached only to explicit authenticated API methods. Logo/image requests receive no bearer headers.
 
+Android additionally gives each application ID its own app-data and Keystore-backed storage sandbox. Therefore sessions and installation IDs do not cross between `app.aqsaa.demo` and a future customer package.
+
+## Android installations, Firebase boundary, and signing
+
+One Flutter codebase supplies all screens, API clients, session logic, localization, and capability handling. A native Android product flavor selects the installation identity. To add a real customer later:
+
+1. Add one product flavor in `android/app/build.gradle.kts` with a unique, permanent application ID and `app_name`.
+2. Add the matching allowlisted entry in `lib/config/installation_config.dart`: flavor, API base, display name, optional bundled branding, and future Firebase metadata. Do not make these independently selectable.
+3. Create that customer's separate Firebase project and register the flavor's exact Android application ID. Put its downloaded file at `android/app/src/<flavor>/google-services.json` (these local files are ignored by Git).
+4. Configure that flavor's Google Services Gradle input and extend the installation project-ID check. This Android implementation uses the native flavor file as its single initialization source; do not add a competing generic Dart options file.
+5. Add customer branding only through that installation entry while continuing to prefer backend-provided institution branding.
+6. Configure that customer's release key through an uncommitted `android/key.properties`. Keep keystores and passwords outside source control and never put Laravel service-account credentials, private keys, or signing secrets in Flutter assets or Dart defines.
+
+The demo uses `firebase_core` and `firebase_messaging` only. For the demo Firebase project, the exact Android package is **`app.aqsaa.demo`**, and its native configuration belongs at **`android/app/src/demo/google-services.json`**. No Laravel service account or signing secret belongs in this repository.
+
+The current verified APK is debug-signed and is not production-ready. A release task fails clearly when `android/key.properties` is absent. Android updates must retain both the installed application's application ID and a compatible signing identity; changing either creates a different app or prevents an update.
+
 ## Logout limitations and account switching
 
 If logout fails or times out, the UI says **server logout was not confirmed**, keeps the session for retry, and blocks another login. There is deliberately no local-only sign-out button in this milestone. A 401 during logout clears the now-invalid local session but does **not** prove server device cleanup; the UI explains this.
@@ -124,6 +223,7 @@ For normal switching, log out successfully first, then enter the other account's
 ## Files explained
 
 - `lib/main.dart`: existing welcome, theme, bootstrap handling, branding, and connection retries. Starts the auth flow after bootstrap succeeds.
+- `lib/config/installation_config.dart`: allowlisted flavor identity, fixed API endpoint, display name, optional branding, and future Firebase consistency boundary.
 - `lib/api/api_client.dart`: the single networking client; JSON requests, bearer scoping, redirect prevention, status/validation handling, and typed responses.
 - `lib/models/bootstrap_response.dart`: existing bootstrap DTOs, unchanged.
 - `lib/models/auth_models.dart`: typed token, safe profile/branch, and capability objects (similar to PHP DTOs).
@@ -145,7 +245,7 @@ For normal switching, log out successfully first, then enter the other account's
 dart format lib test integration_test
 flutter analyze
 flutter test
-flutter build apk --debug --dart-define=API_BASE_URL=https://demo.aqsaa.app/api/v1
+flutter build apk --debug --flavor demo
 flutter test integration_test/session_storage_test.dart -d emulator-5554
 flutter test integration_test/children_test.dart -d emulator-5554
 ```

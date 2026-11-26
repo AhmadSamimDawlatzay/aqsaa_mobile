@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Aqsaa</string>
+    <string name="notification_channel_name">Aqsaa updates</string>
+    <string name="notification_channel_description">New secure inbox notifications</string>
+</resources>

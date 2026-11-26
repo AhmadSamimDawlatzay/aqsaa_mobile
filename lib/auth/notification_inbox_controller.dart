@@ -106,6 +106,15 @@ class NotificationInboxController extends ChangeNotifier {
     return updated;
   }
 
+  Future<void> removeUnavailable(String id) async {
+    // Invalidates a list response that started before visibility was denied.
+    _listGeneration++;
+    _items.removeWhere((item) => item.id == id);
+    loadMoreError = null;
+    _emit();
+    await refreshUnreadCount();
+  }
+
   Future<void> markAllRead() async {
     if (markingAll) return;
     markingAll = true;

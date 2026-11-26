@@ -1,3 +1,6 @@
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'api/api_client.dart';
@@ -10,10 +13,32 @@ import 'auth/auth_flow.dart';
 import 'auth/session_store.dart';
 import 'theme/app_theme.dart';
 import 'widgets/app_components.dart';
+import 'config/installation_config.dart';
+import 'push/firebase_push_messaging.dart';
+import 'push/push_messaging.dart';
 
-void main() {
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  // Background delivery is intentionally passive. The authorized inbox is
+  // refreshed only after UI/session restoration.
+}
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const AqsaaApp());
+  PushMessaging? pushMessaging;
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    final app = await Firebase.initializeApp();
+    final config = InstallationConfig.current;
+    config.validateFirebaseMetadata(
+      androidPackageName: config.androidApplicationId,
+      nativeProjectId: app.options.projectId,
+      dartProjectId: config.firebaseProjectId,
+    );
+    pushMessaging = FirebasePushMessaging(FirebaseMessaging.instance);
+  }
+  runApp(AqsaaApp(pushMessaging: pushMessaging));
 }
 
 class AqsaaApp extends StatefulWidget {
@@ -23,11 +48,13 @@ class AqsaaApp extends StatefulWidget {
     this.sessionStore,
     this.localeController,
     this.textDirection,
+    this.pushMessaging,
   });
   final ApiClient? client;
   final SessionStore? sessionStore;
   final LocaleController? localeController;
   final TextDirection? textDirection;
+  final PushMessaging? pushMessaging;
 
   @override
   State<AqsaaApp> createState() => _AqsaaAppState();
@@ -58,7 +85,7 @@ class _AqsaaAppState extends State<AqsaaApp> {
     child: ListenableBuilder(
       listenable: _localeController,
       builder: (context, _) => MaterialApp(
-        title: AppStrings.appName,
+        title: InstallationConfig.current.displayName,
         debugShowCheckedModeBanner: false,
         theme: AqsaaTheme.light,
         locale: _localeController.locale,
@@ -78,6 +105,7 @@ class _AqsaaAppState extends State<AqsaaApp> {
         home: ConnectionScreen(
           client: widget.client,
           sessionStore: _sessionStore,
+          pushMessaging: widget.pushMessaging,
         ),
       ),
     ),
@@ -85,9 +113,15 @@ class _AqsaaAppState extends State<AqsaaApp> {
 }
 
 class ConnectionScreen extends StatefulWidget {
-  const ConnectionScreen({super.key, this.client, this.sessionStore});
+  const ConnectionScreen({
+    super.key,
+    this.client,
+    this.sessionStore,
+    this.pushMessaging,
+  });
   final ApiClient? client;
   final SessionStore? sessionStore;
+  final PushMessaging? pushMessaging;
   @override
   State<ConnectionScreen> createState() => _ConnectionScreenState();
 }
@@ -179,6 +213,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
         institution: institution,
         branding: InstitutionLogo(uri: _client.logoUri(institution?.logo)),
         onRetryBootstrap: _retry,
+        pushMessaging: widget.pushMessaging,
       );
     },
   );
